@@ -1,5 +1,4 @@
-from typing import Optional
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends
 from app.schemas.system import (
     GeneralGroup,
     SystemSettingsGrouped,
@@ -11,17 +10,13 @@ from app.schemas.system import (
 )
 from tessera_sdk.server.dependencies.auth import get_current_user
 from app.config import get_settings
-from app.auth.rbac import build_rbac_dependencies
+from app.auth.rbac import build_rbac_dependencies, infer_domain
 
 router = APIRouter(
     prefix="/system",
     tags=["system"],
     responses={404: {"description": "Not found"}},
 )
-
-
-async def infer_domain(request: Request) -> Optional[str]:
-    return "*"
 
 
 RESOURCE = "system.settings"

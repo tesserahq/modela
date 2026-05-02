@@ -2,6 +2,7 @@ from traceback import format_exc
 from fastapi import FastAPI, Request, status
 from fastapi.responses import JSONResponse
 from app.exceptions.resource_not_found_error import ResourceNotFoundError
+from app.exceptions.provider_errors import ProviderError, ProviderTimeoutError
 
 
 def register_exception_handlers(app: FastAPI) -> None:
@@ -9,6 +10,20 @@ def register_exception_handlers(app: FastAPI) -> None:
     async def resource_not_found_handler(request: Request, exc: ResourceNotFoundError):
         return JSONResponse(
             status_code=status.HTTP_404_NOT_FOUND,
+            content={"detail": str(exc)},
+        )
+
+    @app.exception_handler(ProviderTimeoutError)
+    async def provider_timeout_handler(request: Request, exc: ProviderTimeoutError):
+        return JSONResponse(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            content={"detail": str(exc)},
+        )
+
+    @app.exception_handler(ProviderError)
+    async def provider_error_handler(request: Request, exc: ProviderError):
+        return JSONResponse(
+            status_code=status.HTTP_502_BAD_GATEWAY,
             content={"detail": str(exc)},
         )
 

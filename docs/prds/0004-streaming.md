@@ -2,13 +2,13 @@
 
 ## Overview
 
-This phase adds Server-Sent Events (SSE) streaming to the `/v1/chat/completions` endpoint. When `stream: true` is set in the request, Modela proxies the provider's token stream to the caller using an OpenAI-compatible chunked response format. All three providers (OpenAI, Anthropic, Ollama) gain streaming support.
+This phase adds Server-Sent Events (SSE) streaming to the `/chat/completions` endpoint. When `stream: true` is set in the request, Modela proxies the provider's token stream to the caller using an OpenAI-compatible chunked response format. All three providers (OpenAI, Anthropic, Ollama) gain streaming support.
 
 ---
 
 ## Goals
 
-- Support `stream: true` on `POST /v1/chat/completions`
+- Support `stream: true` on `POST /chat/completions`
 - Return OpenAI-compatible SSE chunks (`data: {...}\n\n` format)
 - Implement streaming for OpenAI, Anthropic, and Ollama adapters
 - Accumulate token usage from the stream for usage logging
@@ -35,7 +35,7 @@ The key architectural challenge is that FastAPI's `StreamingResponse` must remai
 
 ## API Changes
 
-### `POST /v1/chat/completions` — streaming request
+### `POST /chat/completions` — streaming request
 
 ```json
 {
@@ -46,6 +46,7 @@ The key architectural challenge is that FastAPI's `StreamingResponse` must remai
 ```
 
 When `stream: true`:
+
 - Response `Content-Type` is `text/event-stream`
 - Response body is a sequence of SSE events in OpenAI chunk format
 
@@ -148,6 +149,7 @@ Ollama's OpenAI-compatible endpoint supports streaming natively. The Ollama adap
 Token counts are only available at stream end (in the final provider event). The usage logging Celery task is enqueued after the final `StreamChunk` is yielded and the SSE connection closes — not at the start of the stream.
 
 If the client disconnects before the stream completes:
+
 - The provider connection is closed immediately (generator cleanup via `aclose()`)
 - A partial usage record is written with `finish_reason: "client_disconnected"` and whatever token counts are available
 
@@ -198,3 +200,30 @@ The HTTP status remains `200` (SSE convention — status is sent with headers be
 - `stream: true` + `output_schema` returns a `422` error
 - Non-streaming requests are completely unaffected
 - All new streaming paths have integration tests
+
+---
+
+## Amendment — PRD 0008 Interaction
+
+**`stream: true` + agentic tool loop is not supported in this phase.** When PRD 0008 ships, if a request has `stream: true` and tools are available (via the MCP registry), Modela returns `422 IncompatibleOptions`. Full streaming of agentic loops — emitting token deltas mid-loop across multiple tool-call rounds — requires a coordinated design across SSE, pydantic-ai's streaming interface, and multi-round tool execution. That work is deferred until both PRD 0004 and PRD 0008 are stable in production.
+
+---
+
+## Testing
+
+**SSE response format**
+- `stream: true` returns `Content-Type: text/event-stream`
+- Chunks are valid OpenAI `ChatCompletionChunk` JSON
+- Final chunk has `finish_reason` set; all prior chunks have `finish_reason: null`
+- Stream ends with `data: [DONE]`
+
+**Usage logging**
+- `llm_calls` row is written after stream completes with correct token counts
+- Partial usage row is written with `finish_reason: "client_disconnected"` when client disconnects mid-stream
+
+**Incompatible combinations**
+- `stream: true` + `output_schema` returns `422 IncompatibleOptions`
+- `stream: true` + non-empty `tools` field returns `422 IncompatibleOptions` (PRD 0008)
+
+**Non-streaming regression**
+- Requests without `stream` or with `stream: false` return a standard (non-SSE) response unchanged

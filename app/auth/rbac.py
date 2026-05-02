@@ -9,6 +9,14 @@ ProjectResolver = Callable[[Request], Awaitable[Optional[str]]]
 PREFIX = "modela"
 
 
+async def infer_project(request: Request) -> str:
+    return request.query_params.get("project_id", "*")
+
+
+async def infer_domain(request: Request) -> str:
+    return "*"
+
+
 class RBACActions:
     CREATE = "create"
     READ = "read"

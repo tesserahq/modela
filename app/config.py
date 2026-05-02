@@ -83,6 +83,9 @@ class Settings(BaseSettings):
     db_app_name: str = Field(
         default="modela-api", json_schema_extra={"env": "DB_APP_NAME"}
     )
+    openai_api_key: Optional[str] = Field(
+        default=None, json_schema_extra={"env": "OPENAI_API_KEY"}
+    )
     algolia_app_id: Optional[str] = Field(
         default=None, json_schema_extra={"env": "ALGOLIA_APP_ID"}
     )
