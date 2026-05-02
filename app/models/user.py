@@ -1,4 +1,3 @@
-from sqlalchemy.orm import relationship
 from sqlalchemy import Index, text
 from tessera_sdk.domain.models import UserMixin
 
@@ -21,12 +20,6 @@ class User(UserMixin, Base, TimestampMixin, SoftDeleteMixin):
             unique=True,
             postgresql_where=text("external_id IS NOT NULL"),
         ),
-    )
-
-    events = relationship(
-        "Event",
-        primaryjoin="User.id == foreign(Event.user_id)",
-        back_populates="user",
     )
 
     def __init__(self, **kwargs):
