@@ -17,7 +17,7 @@ jobs:
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: indexa_test
+          POSTGRES_DB: modela_test
         image: postgres:18
         ports: ["5432:5432"]
         options: >-
@@ -34,7 +34,7 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     env:
-      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/indexa_test
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/modela_test
       CREDENTIAL_MASTER_KEY: "RrAy78H8PevHw9EJ3a0OZgrHp8RABeXRQQGajzO5NQc="
       ENV: test
       ROLLBAR_ACCESS_TOKEN: 7cd9dd0b5df9462b8ebdfb522af61cd2
