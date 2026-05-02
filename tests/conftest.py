@@ -36,9 +36,7 @@ _authorize_patcher.start()
 
 from app.main import create_app
 
-pytest_plugins = [
-    "tests.fixtures.user_fixtures"
-]
+pytest_plugins = ["tests.fixtures.user_fixtures"]
 
 logger = logging.getLogger(__name__)
 settings = get_settings()

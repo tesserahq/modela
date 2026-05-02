@@ -40,7 +40,12 @@ def upgrade() -> None:
             server_default=sa.text("gen_random_uuid()"),
         ),
         sa.Column("email", sa.String, unique=True, nullable=True),
-        sa.Column("attributes", postgresql.JSONB(), nullable=False, server_default=sa.text("'{}'")),
+        sa.Column(
+            "attributes",
+            postgresql.JSONB(),
+            nullable=False,
+            server_default=sa.text("'{}'"),
+        ),
         sa.Column("external_id", sa.String, nullable=True),
         sa.Column(
             "created_at", sa.DateTime, nullable=False, server_default=sa.text("now()")
