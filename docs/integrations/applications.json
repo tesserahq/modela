@@ -1,0 +1,44 @@
+{
+  "applications": [
+    {
+      "name": "Identies",
+      "url": "https://identies.mylinden.family",
+      "logo": "https://identies.mylinden.family/assets/identies-logo-EL6bwbBR.png"
+    },
+    {
+      "name": "Looply",
+      "url": "https://looply.mylinden.family",
+      "logo": "https://looply.mylinden.family/assets/looply-logo-BcNwZYOK.png"
+    },
+    {
+      "name": "Vaulta",
+      "url": "https://vaulta.mylinden.family",
+      "logo": "https://vaulta.mylinden.family/assets/vaulta-logo-IPJFGars.png"
+    },
+    {
+      "name": "Custos",
+      "url": "https://custos.mylinden.family",
+      "logo": "https://custos.mylinden.family/assets/custos-logo-C9mafeqj.png"
+    },
+    {
+      "name": "Quore",
+      "url": "https://quore.mylinden.family",
+      "logo": "https://quore.mylinden.family/assets/quore-logo-T3gY24V6.png"
+    },
+    {
+      "name": "Indexa",
+      "url": "https://identity.mylinden.family",
+      "logo": "https://identity.mylinden.family/assets/identity-logo-KQH81sDv.png"
+    },
+    {
+      "name": "Sendly",
+      "url": "https://sendly.mylinden.family",
+      "logo": "https://sendly.mylinden.family/assets/sendly-logo-D2OCIBYH.png"
+    },
+    {
+      "name": "Orcha",
+      "url": "https://orcha.mylinden.family",
+      "logo": "https://orcha.mylinden.family/assets/orcha-logo-DsPf1K6a.png"
+    }
+  ]
+}
