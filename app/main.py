@@ -11,7 +11,7 @@ from tessera_sdk.server.health import get_livez_readyz_router
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from app.telemetry import setup_tracing
 from app.exceptions.handlers import register_exception_handlers
-from app.core.logging_config import get_logger
+from app.infra.logging_config import get_logger
 from app.db import db_manager
 from app.utils.metrics import PrometheusMiddleware, metrics
 
@@ -94,10 +94,16 @@ def create_app(testing: bool = False, auth_middleware=None) -> FastAPI:
         router as completion_request_router,
     )
     from app.routers.completion_router import router as completion_router
+    from app.routers.system_prompts_router import router as system_prompts_router
+    from app.routers.credentials_router import router as credentials_router
+    from app.routers.mcp_servers_router import router as mcp_servers_router
 
     app.include_router(model_config_router)
     app.include_router(completion_request_router)
     app.include_router(completion_router)
+    app.include_router(system_prompts_router)
+    app.include_router(credentials_router)
+    app.include_router(mcp_servers_router)
 
     register_exception_handlers(app)
 

@@ -72,3 +72,12 @@ def test_get_completion_request_not_found(client: TestClient):
     response = client.get(f"/completion-requests/{uuid4()}")
 
     assert response.status_code == 404
+
+
+def test_list_completion_requests_empty(client: TestClient):
+    response = client.get("/completion-requests")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["items"] == []
+    assert data["total"] == 0

@@ -62,13 +62,6 @@ class Settings(BaseSettings):
     service_account_client_secret: str = Field(
         default="", json_schema_extra={"env": "SERVICE_ACCOUNT_CLIENT_SECRET"}
     )
-    quore_enabled: bool = Field(
-        default=False, json_schema_extra={"env": "QUORE_ENABLED"}
-    )
-    quore_api_url: str = Field(
-        default="https://quore-api.meetmodela.com",
-        json_schema_extra={"env": "QUORE_API_URL"},
-    )
     nats_enabled: bool = Field(default=False, json_schema_extra={"env": "NATS_ENABLED"})
     nats_url: Optional[str] = Field(default=None, json_schema_extra={"env": "NATS_URL"})
     nats_queue: Optional[str] = Field(
@@ -86,20 +79,9 @@ class Settings(BaseSettings):
     openai_api_key: Optional[str] = Field(
         default=None, json_schema_extra={"env": "OPENAI_API_KEY"}
     )
-    algolia_app_id: Optional[str] = Field(
-        default=None, json_schema_extra={"env": "ALGOLIA_APP_ID"}
-    )
-    algolia_api_key: Optional[str] = Field(
-        default=None, json_schema_extra={"env": "ALGOLIA_API_KEY"}
-    )
-    typesense_host: Optional[str] = Field(
-        default=None, json_schema_extra={"env": "TYPESENSE_HOST"}
-    )
-    typesense_api_key: Optional[str] = Field(
-        default=None, json_schema_extra={"env": "TYPESENSE_API_KEY"}
-    )
-    typesense_port: int = Field(
-        default=443, json_schema_extra={"env": "TYPESENSE_PORT"}
+    credential_master_key: Optional[str] = Field(
+        default=None,
+        json_schema_extra={"env": "CREDENTIAL_MASTER_KEY"},
     )
 
     @model_validator(mode="before")

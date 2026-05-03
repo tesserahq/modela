@@ -3,6 +3,7 @@ from unittest.mock import AsyncMock, patch, MagicMock
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 from app.repositories.model_config_repository import ModelConfigRepository
+from app.repositories.system_prompt_repository import SystemPromptRepository
 
 
 @pytest.fixture
@@ -20,13 +21,17 @@ def default_config(db: Session):
 
 @pytest.fixture
 def config_with_system_prompt(db: Session):
+    prompt = SystemPromptRepository(db).create_prompt(
+        name="completion-test-prompt",
+        initial_content="You are a concise assistant.",
+    )
     return ModelConfigRepository(db).create(
         {
             "slug": "with-system-prompt",
             "name": "With System Prompt",
             "provider": "openai",
             "model": "gpt-4o",
-            "system_prompt": "You are a concise assistant.",
+            "system_prompt_id": prompt.id,
             "is_default": False,
         }
     )
@@ -147,3 +152,12 @@ def test_completion_usage_in_response(client: TestClient, default_config):
     assert data["usage"]["prompt_tokens"] == 10
     assert data["usage"]["completion_tokens"] == 20
     assert data["usage"]["total_tokens"] == 30
+
+
+def test_completion_missing_messages_returns_422(client: TestClient, default_config):
+    response = client.post(
+        "/chat/completions",
+        json={"model": default_config.slug},
+    )
+
+    assert response.status_code == 422

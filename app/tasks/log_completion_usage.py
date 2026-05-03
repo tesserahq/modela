@@ -1,6 +1,6 @@
 from typing import Optional
-from app.core.celery_app import celery_app
-from app.core.logging_config import get_logger
+from app.infra.celery_app import celery_app
+from app.infra.logging_config import get_logger
 from app.db import SessionLocal
 
 logger = get_logger("log_completion_usage")

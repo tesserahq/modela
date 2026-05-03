@@ -4,8 +4,8 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
-from app.core.celery_app import celery_app
-from app.core.logging_config import get_logger
+from app.infra.celery_app import celery_app
+from app.infra.logging_config import get_logger
 from app.db import SessionLocal
 from app.schemas.event import EventCreate
 from app.schemas.user import UserOnboard

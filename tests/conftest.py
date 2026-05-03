@@ -1,3 +1,4 @@
+import os
 from app.config import get_settings
 import pytest
 import logging
@@ -13,6 +14,10 @@ from alembic import command
 from alembic.config import Config
 from faker import Faker
 from tessera_sdk.server.dependencies.auth import get_current_user
+
+# Set credential key for tests before any app import (fallback when .env not loaded)
+if "CREDENTIAL_MASTER_KEY" not in os.environ and "FERNET_KEY" not in os.environ:
+    os.environ["CREDENTIAL_MASTER_KEY"] = "RrAy78H8PevHw9EJ3a0OZgrHp8RABeXRQQGajzO5NQc="
 
 
 # Patch authorize BEFORE importing create_app (which imports routers)
@@ -36,7 +41,11 @@ _authorize_patcher.start()
 
 from app.main import create_app
 
-pytest_plugins = ["tests.fixtures.user_fixtures"]
+pytest_plugins = [
+    "tests.fixtures.user_fixtures",
+    "tests.fixtures.system_prompt_fixtures",
+    "tests.fixtures.credential_fixtures",
+]
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
