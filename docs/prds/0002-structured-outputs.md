@@ -32,6 +32,7 @@ Structured outputs remove the need for callers to parse or validate LLM response
 The schema definition introduced on `ModelConfig.output_schema` in PRD 0001 was stored but not enforced. This PRD activates it.
 
 **Resolution order:**
+
 1. If `ModelConfig.output_schema` is set → use it (authoritative, request-level schema ignored)
 2. Else if request body contains `output_schema` → use it
 3. Else → no structured output, return free-form text as normal
@@ -43,11 +44,15 @@ The schema definition introduced on `ModelConfig.output_schema` in PRD 0001 was 
 Schemas are expressed as **JSON Schema (Draft 7)** objects. Callers may also submit a simplified form (a flat object with field names and types), but internally Modela normalises everything to JSON Schema before use.
 
 Example:
+
 ```json
 {
   "type": "object",
   "properties": {
-    "sentiment": { "type": "string", "enum": ["positive", "negative", "neutral"] },
+    "sentiment": {
+      "type": "string",
+      "enum": ["positive", "negative", "neutral"]
+    },
     "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
     "topics": { "type": "array", "items": { "type": "string" } }
   },
@@ -59,7 +64,7 @@ Example:
 
 ## API Changes
 
-### `POST /v1/chat/completions` — updated request body
+### `POST /chat/completions` — updated request body
 
 ```json
 {
@@ -68,7 +73,10 @@ Example:
   "output_schema": {
     "type": "object",
     "properties": {
-      "sentiment": { "type": "string", "enum": ["positive", "negative", "neutral"] },
+      "sentiment": {
+        "type": "string",
+        "enum": ["positive", "negative", "neutral"]
+      },
       "confidence": { "type": "number" }
     },
     "required": ["sentiment", "confidence"]
@@ -101,9 +109,9 @@ When a schema is active, the response `content` is a parsed JSON object:
 
 ### Errors
 
-| Code | Condition |
-|------|-----------|
-| `422` | `output_schema` in request is not valid JSON Schema |
+| Code  | Condition                                              |
+| ----- | ------------------------------------------------------ |
+| `422` | `output_schema` in request is not valid JSON Schema    |
 | `502` | Provider returned output that failed schema validation |
 
 The `502` body includes a `validation_errors` field with the JSON Schema validation failures, so callers can debug prompt/schema mismatches.
@@ -113,7 +121,10 @@ The `502` body includes a `validation_errors` field with the JSON Schema validat
   "error": "StructuredOutputValidationError",
   "message": "Provider response did not conform to the requested schema.",
   "validation_errors": [
-    { "path": "$.confidence", "message": "Value 'high' is not of type 'number'" }
+    {
+      "path": "$.confidence",
+      "message": "Value 'high' is not of type 'number'"
+    }
   ],
   "raw_content": "{ \"sentiment\": \"positive\", \"confidence\": \"high\" }"
 }
@@ -170,3 +181,41 @@ The `output_schema` field on ModelConfig (introduced in PRD 0001) is now activel
 - Non-conforming provider response returns `502` with `validation_errors`
 - Free-form requests (no schema anywhere) are unaffected
 - All new code has test coverage including schema validation edge cases
+
+---
+
+## Amendment — PRD 0008 Interaction
+
+**`output_schema` + tool use is mutually exclusive.** When PRD 0008 ships, if a request has an active `output_schema` (from ModelConfig or the request body) and tools are available for that request, Modela returns:
+
+```json
+{
+  "error": "IncompatibleOptions",
+  "message": "Structured outputs and tool use cannot be combined."
+}
+```
+
+HTTP status: `422`.
+
+**Why:** Anthropic's structured output mechanism injects a synthetic tool definition; adding real MCP tools alongside it produces ambiguous tool selection. For all providers, applying a JSON Schema constraint to a response that may be preceded by multiple tool-call rounds is undefined behaviour — the schema would need to apply to the final assistant turn only, which requires mid-loop schema awareness not yet designed. This restriction will be lifted in a future phase once the interaction is fully specified.
+
+---
+
+## Testing
+
+**Schema resolution**
+- `ModelConfig.output_schema` takes precedence over request-level `output_schema`
+- Request `output_schema` is used when `ModelConfig.output_schema` is null
+- Neither set → free-form response, no schema validation attempted
+
+**OpenAI injection**
+- `response_format` with the correct JSON Schema is forwarded to the provider when `output_schema` is active
+- Conforming provider response returns parsed JSON object in `choices[0].message.content`
+
+**Validation**
+- Non-conforming provider response returns `502` with `validation_errors` array and `raw_content`
+- Invalid `output_schema` in request body (not valid JSON Schema) returns `422` before hitting provider
+- Valid schema with extra provider fields in response that don't break validation still passes
+
+**PRD 0008 incompatibility**
+- Request with active `output_schema` and non-empty `tools` field returns `422 IncompatibleOptions`

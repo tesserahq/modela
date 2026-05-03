@@ -89,6 +89,16 @@ def create_app(testing: bool = False, auth_middleware=None) -> FastAPI:
 
     app.include_router(get_livez_readyz_router())
 
+    from app.routers.model_config_router import router as model_config_router
+    from app.routers.completion_request_router import (
+        router as completion_request_router,
+    )
+    from app.routers.completion_router import router as completion_router
+
+    app.include_router(model_config_router)
+    app.include_router(completion_request_router)
+    app.include_router(completion_router)
+
     register_exception_handlers(app)
 
     # Add pagination support

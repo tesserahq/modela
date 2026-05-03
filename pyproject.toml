@@ -60,6 +60,7 @@ pytz = "^2025.2"
 postmarker = "^1.0"
 mako = "^1.3.10"
 faststream = {extras = ["nats"], version = "^0.6.3"}
+pydantic-ai = {extras = ["openai"], version = "^1.89.1"}
 
 [tool.poetry.dependencies.uvicorn]
 extras = [ "standard" ]
@@ -69,6 +70,12 @@ version = "^0.40.0"
 pytest = "^9.0.0"
 httpx = "^0.28.0"  # Required by FastAPI TestClient
 pytest-asyncio = "^1.0.0"
+
+[tool.pytest.ini_options]
+asyncio_mode = "strict"
+filterwarnings = [
+    "ignore::pydantic.warnings.PydanticDeprecatedSince20:tessera_sdk",
+]
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]

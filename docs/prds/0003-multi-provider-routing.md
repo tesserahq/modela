@@ -2,23 +2,23 @@
 
 ## Overview
 
-This phase extends Modela to support multiple LLM providers. It introduces **Anthropic** and **Ollama** adapters and a provider registry that resolves a ModelConfig's `provider` field to the correct adapter at runtime. Consumers remain unaware of the underlying provider — only the ModelConfig slug changes.
+This phase extends Modela to support Anthropic (Claude) and Ollama alongside OpenAI. Rather than writing new adapter classes, providers are added by registering pydantic-ai's built-in model types inside `ModelaModel` — the gateway interceptor introduced in PRD 0008. pydantic-ai handles all provider-specific format translation (messages, tool calls, streaming). Modela's gateway concerns (ModelConfig resolution, usage logging, BYOK key lookup, resilience) remain in `ModelaModel`.
 
 ---
 
 ## Goals
 
-- Add Anthropic (Claude) and Ollama (local/self-hosted) provider adapters
-- Introduce a provider registry: a map of provider identifier → adapter instance
+- Add Anthropic and Ollama as supported providers
+- Extend `ModelaModel` with a provider factory that maps `ModelConfig.provider` → the appropriate pydantic-ai model
 - Extend ModelConfig validation to reject unknown `provider` values at write time
-- Ensure all providers implement the `BaseProviderAdapter` interface from PRD 0001
-- Maintain full OpenAI-compatible response shape regardless of provider
+- Maintain full OpenAI-compatible response shape regardless of provider (pydantic-ai normalises this)
+- Remove `BaseProviderAdapter`, `CompletionResponse`, and `PROVIDER_REGISTRY` — these are superseded by the `ModelaModel` architecture (see PRD 0001 amendment, PRD 0008)
 
 ---
 
 ## Non-Goals
 
-- Dynamic provider registration at runtime (providers are registered at startup)
+- Dynamic provider registration at runtime
 - Weighted load balancing across providers (PRD 0005)
 - Fallback chains (PRD 0005)
 - Streaming (PRD 0004)
@@ -28,63 +28,82 @@ This phase extends Modela to support multiple LLM providers. It introduces **Ant
 
 ## Background
 
-PRD 0001 established `BaseProviderAdapter` and the OpenAI implementation. The adapter pattern was designed so adding a new provider means implementing one class and registering it — no changes to routing or request handling logic.
+PRD 0001 shipped the OpenAI adapter as a temporary foundation. PRD 0008 replaced it with `ModelaModel`, a pydantic-ai `Model` implementation that wraps a pydantic-ai native model and intercepts each call for gateway concerns. Adding a new provider in this architecture is a matter of extending the `ModelaModel` factory — no new adapter class, no format translation code, no registry dict to maintain.
 
-Each provider has a different native request/response format. The adapter layer is responsible for translating the internal `CompletionRequest` → provider format, and the provider response → `CompletionResponse`. Consumers and the rest of Modela only ever see the internal types.
+pydantic-ai supports OpenAI, Anthropic, Ollama (via its OpenAI-compatible API), Gemini, Groq, and others natively. For Modela, adding a provider means:
 
----
-
-## Provider Registry
-
-A registry is a dict-like structure populated at application startup:
-
-```python
-PROVIDER_REGISTRY: dict[str, BaseProviderAdapter] = {
-    "openai":    OpenAIAdapter(settings),
-    "anthropic": AnthropicAdapter(settings),
-    "ollama":    OllamaAdapter(settings),
-}
-```
-
-Resolution at request time:
-```python
-adapter = PROVIDER_REGISTRY.get(model_config.provider)
-if adapter is None:
-    raise ProviderNotRegisteredError(model_config.provider)
-```
-
-**Startup validation:** if a provider is referenced by any ModelConfig in the DB but its adapter is not registered (e.g. missing API key), Modela logs a warning but does not fail to start. The error surfaces at request time.
+1. Add its API key / config to `Settings`
+2. Add a branch to `_build_inner_model()` in `ModelaModel`
+3. Add its identifier to the `SUPPORTED_PROVIDERS` list used for ModelConfig validation
 
 ---
 
-## Anthropic Adapter
+## `ModelaModel` Provider Factory
 
-### Credential
+`ModelaModel` is introduced in PRD 0008. This PRD extends its factory to cover Anthropic and Ollama:
+
+```python
+def _build_inner_model(
+    model_config: ModelConfig,
+    api_key: str,
+    settings: Settings,
+) -> pydantic_ai.models.Model:
+    match model_config.provider:
+        case "openai":
+            return OpenAIModel(
+                model_config.model,
+                provider=OpenAIProvider(api_key=api_key),
+            )
+        case "anthropic":
+            return AnthropicModel(
+                model_config.model,
+                provider=AnthropicProvider(api_key=api_key),
+            )
+        case "ollama":
+            return OpenAIModel(
+                model_config.model,
+                provider=OpenAIProvider(
+                    api_key="ollama",
+                    base_url=settings.ollama_base_url,
+                ),
+            )
+        case _:
+            raise ProviderNotRegisteredError(model_config.provider)
+```
+
+Ollama reuses `OpenAIModel` with a custom `base_url` — no separate implementation needed since Ollama exposes an OpenAI-compatible API.
+
+---
+
+## Provider Credentials
+
+### Anthropic
 
 ```
 ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-### Request mapping
+Resolved via BYOK logic (PRD 0006): project key takes precedence over the platform key in `Settings`. `ModelaModel` receives the resolved key before constructing the inner `AnthropicModel`.
 
-Anthropic's API (`/v1/messages`) differs from OpenAI in key ways:
+### Ollama
 
-| Concept | OpenAI | Anthropic |
-|---------|--------|-----------|
-| System prompt | `messages[0].role = "system"` | Top-level `system` field |
-| Model param | `model` | `model` |
-| Max tokens | `max_tokens` | `max_tokens` (required) |
-| Response | `choices[0].message.content` | `content[0].text` |
-| Token usage | `usage.prompt_tokens` / `completion_tokens` | `usage.input_tokens` / `output_tokens` |
+No API key. Configuration:
 
-The adapter handles all translation. The `system_prompt` from ModelConfig is extracted from the messages list and placed in the top-level `system` field before forwarding.
+```
+OLLAMA_BASE_URL=http://localhost:11434
+```
 
-### Structured outputs (from PRD 0002)
+If `OLLAMA_BASE_URL` is not set, `"ollama"` is excluded from `SUPPORTED_PROVIDERS` and ModelConfig validation rejects it.
 
-Anthropic does not have a native `response_format` equivalent. Structured output is requested by injecting a tool definition that describes the output schema and instructing the model to call it:
+---
+
+## Structured Outputs — Anthropic (from PRD 0002)
+
+Anthropic does not support `response_format`. When `output_schema` is active and the provider is Anthropic, `ModelaModel.request()` injects a synthetic tool before delegating to the inner `AnthropicModel`:
 
 ```python
-tools = [{
+# Injected into the request before calling self._inner.request()
+synthetic_tools = [{
     "name": "structured_output",
     "description": "Return the response in the required format.",
     "input_schema": output_schema,
@@ -92,53 +111,33 @@ tools = [{
 tool_choice = {"type": "tool", "name": "structured_output"}
 ```
 
-The response is extracted from `content[0].input` (tool use block) rather than `content[0].text`. The validation step (PRD 0002) then runs as normal.
+The response is extracted from the tool use block (`content[0].input`) rather than `content[0].text`. The validation step (PRD 0002) runs as normal.
 
-### `extra_body`
-
-Merged into the Anthropic request dict before sending, using `httpx` directly or the Anthropic SDK's equivalent passthrough mechanism.
-
----
-
-## Ollama Adapter
-
-Ollama exposes an OpenAI-compatible API at a configurable base URL. The Ollama adapter reuses the OpenAI SDK with a custom `base_url`:
-
-```python
-client = openai.AsyncOpenAI(
-    api_key="ollama",  # Ollama ignores this
-    base_url=settings.ollama_base_url,  # e.g. http://localhost:11434/v1
-)
-```
-
-Because Ollama is OpenAI-compatible, no request/response translation is needed beyond what the OpenAI adapter already does. The Ollama adapter is a thin subclass.
-
-### Credential
-
-No API key. Configuration is:
-```
-OLLAMA_BASE_URL=http://localhost:11434
-```
-
-If `OLLAMA_BASE_URL` is not set, the Ollama adapter is not registered (optional provider).
-
-### Structured outputs
-
-Ollama's structured output support depends on the underlying model. When `output_schema` is active, the adapter injects `response_format` identically to the OpenAI adapter. If the model does not support it, Ollama returns an error that surfaces as a `502`.
+This injection is handled entirely within `ModelaModel` — no changes to the router or command layer are needed for Anthropic structured output support.
 
 ---
 
 ## ModelConfig Validation
 
-When a ModelConfig is created or updated, the `provider` field is validated against the set of registered providers:
+`SUPPORTED_PROVIDERS` is a list derived from which providers are configured at startup:
 
 ```python
-if config.provider not in PROVIDER_REGISTRY:
-    raise ValidationError(f"Unknown provider '{config.provider}'. "
-                          f"Registered providers: {list(PROVIDER_REGISTRY.keys())}")
+SUPPORTED_PROVIDERS = ["openai"]
+if settings.anthropic_api_key:
+    SUPPORTED_PROVIDERS.append("anthropic")
+if settings.ollama_base_url:
+    SUPPORTED_PROVIDERS.append("ollama")
 ```
 
-This prevents creating ModelConfigs that can never be resolved.
+When a ModelConfig is created or updated, the `provider` field is validated against this list:
+
+```python
+if config.provider not in SUPPORTED_PROVIDERS:
+    raise ValidationError(
+        f"Unknown provider '{config.provider}'. "
+        f"Supported: {SUPPORTED_PROVIDERS}"
+    )
+```
 
 ---
 
@@ -151,25 +150,17 @@ class Settings(BaseSettings):
 
     # New
     anthropic_api_key: str | None = None
-    ollama_base_url: str | None = None
+    ollama_base_url:   str | None = None
 ```
-
----
-
-## Provider-to-Response Normalisation
-
-All adapters must produce a `CompletionResponse` with identical fields regardless of provider. The internal shape (defined in PRD 0001) is the contract. The response returned to the consumer is the OpenAI-compatible JSON shape, constructed from `CompletionResponse`, not from the raw provider response.
-
-The `raw` field on `CompletionResponse` still contains the unmodified provider response for debugging.
 
 ---
 
 ## Dependencies
 
-- PRD 0001 (BaseProviderAdapter, ModelConfig, usage logging)
-- PRD 0002 (structured output injection — Anthropic tool-calling approach)
-- `anthropic` Python SDK (new dependency)
-- `openai` Python SDK already present (reused for Ollama)
+- PRD 0001 (ModelConfig, usage logging)
+- PRD 0008 (`ModelaModel` and the provider factory — must ship first)
+- `pydantic-ai[anthropic]` (adds Anthropic support to pydantic-ai)
+- `openai` Python SDK already present (reused for Ollama via pydantic-ai)
 
 ---
 
@@ -178,8 +169,32 @@ The `raw` field on `CompletionResponse` still contains the unmodified provider r
 - A ModelConfig with `provider: "anthropic"` successfully routes to Claude and returns an OpenAI-compatible response
 - A ModelConfig with `provider: "ollama"` routes to the local Ollama instance
 - Creating a ModelConfig with an unknown provider returns a `422` validation error
-- `system_prompt` from ModelConfig is correctly placed in Anthropic's top-level `system` field
-- Structured outputs via PRD 0002 work with both Anthropic (tool-based) and Ollama
+- `system_prompt` from ModelConfig is correctly applied for Anthropic requests (pydantic-ai places it in the top-level `system` field)
+- Structured outputs (PRD 0002) work for Anthropic via the synthetic tool injection in `ModelaModel`
+- Structured outputs work for Ollama via `response_format` (model-dependent; provider error surfaces as `502` if unsupported)
 - `extra_body` passthrough works for all three providers
 - Usage records are written correctly for all providers
-- All new adapters have integration tests (can be skipped in CI without provider credentials via env flag)
+- Ollama provider is excluded from `SUPPORTED_PROVIDERS` when `OLLAMA_BASE_URL` is not set
+- All new provider paths have integration tests (skippable in CI without credentials via env flag)
+
+---
+
+## Testing
+
+**ModelaModel factory**
+- `provider: "anthropic"` builds an `AnthropicModel` inner model
+- `provider: "ollama"` builds an `OpenAIModel` with the configured `base_url`
+- Unknown provider raises `ProviderNotRegisteredError`
+- `OLLAMA_BASE_URL` unset → `"ollama"` absent from `SUPPORTED_PROVIDERS`
+
+**Anthropic provider** (integration, skippable without `ANTHROPIC_API_KEY`)
+- Completion request routes to Anthropic and returns an OpenAI-compatible response
+- `system_prompt` from ModelConfig is placed in Anthropic's top-level `system` field, not in `messages`
+- Anthropic structured output (PRD 0002): synthetic tool is injected and response is extracted from tool use block
+
+**Ollama provider** (integration, skippable without `OLLAMA_BASE_URL`)
+- Completion request routes to the Ollama base URL and returns an OpenAI-compatible response
+
+**ModelConfig validation**
+- Creating a ModelConfig with `provider: "anthropic"` succeeds when `ANTHROPIC_API_KEY` is set
+- Creating a ModelConfig with an unsupported provider returns `422`

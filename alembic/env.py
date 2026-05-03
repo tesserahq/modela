@@ -5,6 +5,7 @@ from sqlalchemy import pool
 from alembic import context
 from app.db import Base
 from app.config import Settings
+import app.models  # noqa: F401 — registers all models with Base.metadata
 
 # Import all models so they are registered with Base.metadata
 

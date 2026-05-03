@@ -167,3 +167,39 @@ No new metrics endpoints are added in this phase; the existing OpenTelemetry ins
 - Usage records correctly reflect `attempt_count` and `fallback_from_slug`
 - Non-retryable errors (content filter, bad request) are not retried
 - All resilience paths have test coverage (provider failure simulation via mocks)
+
+---
+
+## Testing
+
+**Retry policy**
+- Transient provider error (`5xx`, timeout, `429`) is retried up to `retry_attempts` times with backoff
+- Non-transient error (`4xx` content filter, bad request) is not retried
+- Successful retry returns a normal response with no error surfaced to the caller
+
+**Fallback chain**
+- After all retries exhausted on primary config, fallback config is tried automatically
+- `X-Modela-Fallback-Used` header is present when fallback was triggered; absent otherwise
+- `llm_calls` row records `fallback_from_slug` and correct `attempt_count`
+- Entire chain exhausted returns `502 ProviderChainExhausted` with per-config attempt details
+
+**Circuit breaker**
+- Provider with `OPEN` circuit is short-circuited immediately (no network call made)
+- Short-circuited request triggers fallback if configured
+- Circuit transitions to `HALF_OPEN` after recovery window
+
+**ModelConfig validation**
+- Circular fallback chain (`A → B → A`) is rejected at write time with `422`
+- Chain depth exceeding 5 is rejected at write time with `422`
+
+**`ModelConfigRepository`**
+- `get_fallback_chain(slug)` returns the ordered list of configs in the chain
+- Cycle detection helper returns `True` for `A → B → A` and `False` for a valid linear chain
+
+**Commands (`update_model_config_command`)**
+- Setting `fallback_config_slug` that creates a cycle raises a validation error before writing
+- Setting a valid `fallback_config_slug` persists correctly
+
+**Router (`model_config_router`)**
+- `PUT /model-configs/{id}` with a `fallback_config_slug` that creates a cycle returns `422`
+- `PUT /model-configs/{id}` with `timeout_ms` and `retry_attempts` persists and is returned in the response

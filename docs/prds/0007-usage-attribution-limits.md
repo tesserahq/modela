@@ -40,6 +40,7 @@ After every successful completion (streaming or non-streaming), a usage event is
 **Event type:** `modela.completion.completed`
 
 **Payload:**
+
 ```json
 {
   "event_type": "modela.completion.completed",
@@ -68,15 +69,15 @@ Emission is asynchronous (Celery task, fire-and-forget after the response is ret
 
 **Table: `project_quotas`**
 
-| Column | Type | Default | Notes |
-|--------|------|---------|-------|
-| `id` | UUID | | Primary key |
-| `project_id` | UUID | | Unique |
-| `rpm_limit` | INTEGER | `null` | Max requests per minute. `null` = unlimited |
-| `daily_token_limit` | INTEGER | `null` | Max tokens per calendar day (UTC). `null` = unlimited |
-| `monthly_token_limit` | INTEGER | `null` | Max tokens per calendar month (UTC). `null` = unlimited |
-| `created_at` | TIMESTAMPTZ | | |
-| `updated_at` | TIMESTAMPTZ | | |
+| Column                | Type        | Default | Notes                                                   |
+| --------------------- | ----------- | ------- | ------------------------------------------------------- |
+| `id`                  | UUID        |         | Primary key                                             |
+| `project_id`          | UUID        |         | Unique                                                  |
+| `rpm_limit`           | INTEGER     | `null`  | Max requests per minute. `null` = unlimited             |
+| `daily_token_limit`   | INTEGER     | `null`  | Max tokens per calendar day (UTC). `null` = unlimited   |
+| `monthly_token_limit` | INTEGER     | `null`  | Max tokens per calendar month (UTC). `null` = unlimited |
+| `created_at`          | TIMESTAMPTZ |         |                                                         |
+| `updated_at`          | TIMESTAMPTZ |         |                                                         |
 
 Quotas are admin-managed only. If no row exists for a project, limits are unlimited.
 
@@ -96,6 +97,7 @@ TTL: 60 seconds
 ```
 
 On each request:
+
 1. `INCR modela:rpm:{project_id}`
 2. If the key is new, set TTL to 60s
 3. If count > `rpm_limit` → reject with `429`
@@ -145,12 +147,13 @@ HTTP status: `429` for rate limits, `402` for quota exhaustion.
 
 Consumers can query their own usage. `project_id` is from auth context.
 
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/v1/usage` | Usage summary for caller's project |
-| `GET` | `/v1/usage/requests` | Paginated list of individual completion requests |
+| Method | Path              | Description                                      |
+| ------ | ----------------- | ------------------------------------------------ |
+| `GET`  | `/usage`          | Usage summary for caller's project               |
+| `GET`  | `/usage/requests` | Paginated list of individual completion requests |
 
-**`GET /v1/usage` response:**
+**`GET /usage` response:**
+
 ```json
 {
   "project_id": "uuid",
@@ -180,12 +183,12 @@ Consumers can query their own usage. `project_id` is from auth context.
 
 RBAC: `modela.usage:read`.
 
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/v1/admin/projects/{project_id}/usage` | Usage summary for any project |
-| `GET` | `/v1/admin/projects/{project_id}/usage/requests` | Paginated request log |
-| `POST` | `/v1/admin/projects/{project_id}/quotas` | Set or update quota for a project |
-| `DELETE` | `/v1/admin/projects/{project_id}/quotas` | Remove quota (revert to unlimited) |
+| Method   | Path                                          | Description                        |
+| -------- | --------------------------------------------- | ---------------------------------- |
+| `GET`    | `/admin/projects/{project_id}/usage`          | Usage summary for any project      |
+| `GET`    | `/admin/projects/{project_id}/usage/requests` | Paginated request log              |
+| `POST`   | `/admin/projects/{project_id}/quotas`         | Set or update quota for a project  |
+| `DELETE` | `/admin/projects/{project_id}/quotas`         | Remove quota (revert to unlimited) |
 
 ---
 
@@ -226,7 +229,46 @@ Prices are per token (USD). The table is updated manually when provider pricing 
 - Requests over `rpm_limit` are rejected with `429` before hitting the provider
 - Requests over `daily_token_limit` or `monthly_token_limit` are rejected with `402`
 - `reset_at` is accurate in the limit-exceeded response
-- `GET /v1/usage` returns correct token and request counts for the caller's project
+- `GET /usage` returns correct token and request counts for the caller's project
 - Admin quota CRUD endpoints work and are inaccessible to non-admins
 - Eventa emission failure does not affect the response to the caller
 - All enforcement logic has unit tests with mocked Redis and DB
+
+---
+
+## Testing
+
+**Rate limiting (RPM)**
+- Request within `rpm_limit` succeeds
+- Request exceeding `rpm_limit` returns `429` with `reset_at`
+- Counter resets after the 60-second window
+
+**Token quotas**
+- Request within `daily_token_limit` succeeds
+- Request that would exceed `daily_token_limit` returns `402` with `limit_type: "daily_token"` and `reset_at`
+- Monthly quota enforcement follows the same pattern
+- No quota row for a project → requests are unlimited
+
+**Eventa emission**
+- `modela.completion.completed` event is emitted after every successful request with correct payload fields
+- Eventa emission failure does not affect the response returned to the caller
+
+**Usage query endpoints**
+- `GET /usage` returns correct `input_tokens`, `output_tokens`, `requests` for today and this month
+- Non-admin cannot access `/admin/projects/{project_id}/usage`
+- Admin quota `POST` creates or updates the quota row; `DELETE` removes it (reverts to unlimited)
+
+**`LLMCallRepository`** (formerly `CompletionRequestRepository`)
+- `get_token_sum(project_id, since)` returns the correct aggregate across multiple rows
+- `get_token_sum` excludes soft-deleted rows
+- `get_token_sum` returns `0` when no rows exist for the given window
+
+**`ProjectQuotaRepository`**
+- `get(project_id)` returns the quota row; returns `None` when no quota is configured
+- Create and update are idempotent for the same `project_id`
+
+**Router (`usage_router`)**
+- `GET /usage` aggregates correctly across multiple `llm_calls` rows for the authenticated project
+- `GET /usage/requests` returns paginated rows ordered by `created_at` descending
+- `POST /admin/projects/{project_id}/quotas` with `rpm_limit` persists and is reflected in `GET /usage`
+- `DELETE /admin/projects/{project_id}/quotas` removes the row; subsequent request treats project as unlimited
