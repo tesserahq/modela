@@ -5,7 +5,8 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional, cast
 from uuid import UUID
 
-from sqlalchemy.orm import Query, Session
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 
 from app.services.credentials import (
     decrypt_credential_fields,
@@ -43,9 +44,9 @@ class CredentialRepository(SoftDeleteRepository[Credential]):
             .all()
         )
 
-    def get_credentials_query(self) -> Query[Credential]:
-        """Get a query for credentials (for pagination)."""
-        return self.db.query(Credential).order_by(Credential.created_at.desc())
+    def get_credentials_query(self):
+        """Return a Select for credentials (for use with paginate(db, query))."""
+        return select(Credential).order_by(Credential.created_at.desc())
 
     def create_credential(
         self,

@@ -36,17 +36,24 @@ app/
   db.py                 # Base, SessionLocal, get_db, soft-delete session event
 
   models/               # SQLAlchemy ORM (Base + TimestampMixin + SoftDeleteMixin)
+                        # Pure join tables (no surrogate PK) use sqlalchemy.Table() on Base.metadata — not an ORM class
   schemas/              # Pydantic v2 request/response schemas
   repositories/         # Data access — SoftDeleteRepository[T] base class
+                        # Pagination query methods return Select; routers call paginate(db, repo.list_query(...))
   commands/             # Mutating operations only — CREATE/UPDATE/DELETE. For reads, routers call repositories directly (no command needed).
     model_configs/      # create_, update_, delete_model_config_command.py
     completions/        # create_completion_command.py
   routers/
-    utils.py            # Shared FastAPI dependencies — get_<resource>_or_404 pattern for ID-based endpoints
+    utils/dependencies.py  # Shared FastAPI dependencies — get_<resource>_or_404 pattern for ID-based endpoints
   providers/            # Provider adapters: BaseProviderAdapter ABC, registry
   tasks/                # Celery tasks (fire-and-forget via .delay())
   auth/rbac.py          # build_rbac_dependencies() — wraps tessera-sdk authorize()
   exceptions/           # ResourceNotFoundError (404), ProviderError (502), ProviderTimeoutError (504)
+  gateway/              # ModelaModel — pydantic-ai Model wrapper; intercepts each round-trip to apply ModelConfig params and log token usage
+  services/
+    credential_applier.py  # Resolves credential_id → auth headers (5 types: Bearer, Basic, API key, M2M, delegated exchange)
+    mcp/               # MCPToolset (pydantic-ai AbstractToolset adapter), MCPToolExecutor, ToolCatalog (Redis-cached), client_factory
+  infra/               # Celery app, logging config, telemetry, server settings
 ```
 
 ## Key env vars
@@ -59,7 +66,8 @@ app/
 | `DISABLE_AUTH` | `false` | set `true` locally to skip JWT middleware |
 | `OPENAI_API_KEY` | — | required for completion requests |
 | `REDIS_HOST` / `REDIS_PORT` | `localhost` / `6379` | Celery broker + backend |
-| `FERNET_KEY` | — | optional; reserved for future credential encryption |
+| `CREDENTIAL_MASTER_KEY` | — | required for credential storage (AES encryption key) |
+| `FERNET_KEY` | — | optional; legacy field, superseded by `CREDENTIAL_MASTER_KEY` |
 
 ## Gotchas
 
@@ -75,7 +83,7 @@ app/
 
 **Adding a new provider:** implement `BaseProviderAdapter` in `app/providers/`, register it in `app/providers/registry.py`.
 
-**`routers/utils.py` is the canonical place for shared dependencies.** Use `ResourceNotFoundError` (not `HTTPException`) so the registered exception handler serializes the 404 response consistently. The older `routers/utils/dependencies.py` module uses `HTTPException` directly — don't follow that pattern for new code.
+**`routers/utils/dependencies.py` is the canonical place for shared dependencies.** Use `ResourceNotFoundError` (not `HTTPException`) so the registered exception handler serializes the 404 response consistently. Note: `get_mcp_server_by_id` in that file still uses `HTTPException` directly — don't follow that example for new code.
 
 **List endpoints use the SQLAlchemy paginate extension.** Import `from fastapi_pagination.ext.sqlalchemy import paginate` and pass `(db, select(...))` — not `paginate(list)`, which triggers a warning and loads all rows.
 

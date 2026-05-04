@@ -41,13 +41,18 @@ rbac = build_rbac_dependencies(
 )
 
 
-@router.get("/types", response_model=list[CredentialTypeInfo])
+@router.get("/types", response_model=Page[CredentialTypeInfo])
 def list_credential_types(
+    params: Params = Depends(),
     _authorized: bool = Depends(rbac["read"]),
     _current_user=Depends(get_current_user),
-) -> list[CredentialTypeInfo]:
-    """List available credential types and their attributes for UI rendering."""
-    return list(credential_registry.values())
+) -> Page[CredentialTypeInfo]:
+    """List available credential types and their attributes for UI rendering (paginated)."""
+    all_types = list(credential_registry.values())
+    total = len(all_types)
+    offset = (params.page - 1) * params.size
+    page_items = all_types[offset : offset + params.size]
+    return create_page(page_items, total=total, params=params)
 
 
 @router.get("", response_model=Page[CredentialRead])
@@ -60,9 +65,12 @@ def list_credentials(
     """List all credentials with pagination."""
     svc = CredentialRepository(db)
     query = svc.get_credentials_query()
-    page = paginate(query, params=params)
-    items = [svc.to_credential_read(c) for c in page.items]
-    return create_page(items, total=page.total, params=params)
+    return paginate(
+        db,
+        query,
+        params=params,
+        transformer=lambda rows: [svc.to_credential_read(c) for c in rows],
+    )
 
 
 @router.post("", response_model=CredentialRead, status_code=201)

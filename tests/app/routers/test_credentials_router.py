@@ -24,19 +24,22 @@ def test_list_credential_types(client):
     r = client.get("/credentials/types")
     assert r.status_code == 200
     data = r.json()
-    assert isinstance(data, list)
-    type_names = [t["type_name"] for t in data]
+    assert "items" in data
+    assert "total" in data
+    items = data["items"]
+    assert isinstance(items, list)
+    type_names = [t["type_name"] for t in items]
     assert CredentialType.BEARER_AUTH in type_names
     assert CredentialType.BASIC_AUTH in type_names
     assert CredentialType.API_KEY in type_names
     assert CredentialType.M2M_IDENTIES in type_names
     assert CredentialType.DELEGATED_IDENTIES_EXCHANGE in type_names
-    for t in data:
+    for t in items:
         assert "type_name" in t
         assert "display_name" in t
         assert "fields" in t
         assert isinstance(t["fields"], list)
-    bearer = next(t for t in data if t["type_name"] == CredentialType.BEARER_AUTH)
+    bearer = next(t for t in items if t["type_name"] == CredentialType.BEARER_AUTH)
     assert len(bearer["fields"]) == 1
     assert bearer["fields"][0]["name"] == "token"
     assert bearer["fields"][0]["input_type"] == "password"
