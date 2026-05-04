@@ -1,4 +1,6 @@
-# PRD 0002 — Structured Outputs
+# PRD 0010 — Structured Outputs
+
+> **Status:** Deferred — not needed immediately. Implement after PRDs 0001–0009 are complete.
 
 ## Overview
 
@@ -22,6 +24,8 @@ This phase adds structured output support: the ability to request a JSON respons
 - Automatic schema generation from Python type annotations (caller-side concern)
 - Coercing or auto-correcting non-conforming responses (fail fast, don't guess)
 - Multi-provider structured output (covered in PRD 0003 for each new provider)
+- Simplified schema form (flat `{"field": "type"}` objects) — callers must submit valid JSON Schema Draft 7 directly
+- Streaming structured output — streaming is not yet implemented in Modela; this PRD applies to non-streaming only
 
 ---
 
@@ -30,6 +34,8 @@ This phase adds structured output support: the ability to request a JSON respons
 Structured outputs remove the need for callers to parse or validate LLM responses themselves. Modela becomes the single enforcement point: inject the schema into the provider request, receive the response, validate it, and return clean JSON or a clear error.
 
 The schema definition introduced on `ModelConfig.output_schema` in PRD 0001 was stored but not enforced. This PRD activates it.
+
+**Modela validates even when the provider guarantees conformance** (e.g. OpenAI strict mode) as a defense-in-depth measure. This ensures consistent behaviour when future providers are added that do not offer native schema enforcement.
 
 **Resolution order:**
 
@@ -41,7 +47,7 @@ The schema definition introduced on `ModelConfig.output_schema` in PRD 0001 was 
 
 ## Schema Format
 
-Schemas are expressed as **JSON Schema (Draft 7)** objects. Callers may also submit a simplified form (a flat object with field names and types), but internally Modela normalises everything to JSON Schema before use.
+Schemas are expressed as **JSON Schema (Draft 7)** objects.
 
 Example:
 
@@ -111,7 +117,8 @@ When a schema is active, the response `content` is a parsed JSON object:
 
 | Code  | Condition                                              |
 | ----- | ------------------------------------------------------ |
-| `422` | `output_schema` in request is not valid JSON Schema    |
+| `422` | `output_schema` in request is not valid JSON Schema Draft 7 |
+| `422` | `output_schema` uses unsupported keywords (`$ref`, `oneOf`, `allOf`) — see OpenAI Strict Mode Coercion below |
 | `502` | Provider returned output that failed schema validation |
 
 The `502` body includes a `validation_errors` field with the JSON Schema validation failures, so callers can debug prompt/schema mismatches.
@@ -134,6 +141,21 @@ The `502` body includes a `validation_errors` field with the JSON Schema validat
 
 ## Implementation
 
+### OpenAI Strict Mode Coercion
+
+OpenAI's `strict: True` mode requires schemas to meet rules beyond valid JSON Schema:
+
+- Every `object` must have `"additionalProperties": false`
+- Every property of every `object` must appear in `"required"`
+- The keywords `$ref`, `oneOf`, `allOf`, and `anyOf` (except for nullable unions) are not supported
+
+Before forwarding to OpenAI, Modela normalises the schema with a single recursive pass over `object` types:
+
+1. Add `"additionalProperties": false` if absent
+2. Move all defined properties into `"required"` if not already present
+
+**Scope limit:** coercion applies to top-level and nested `object` nodes only. Schemas that use `$ref`, `oneOf`, or `allOf` are rejected with `422` and a message directing the caller to use a flat, fully-inlined schema. This restriction may be lifted in a future phase.
+
 ### OpenAI Provider Injection
 
 OpenAI supports structured outputs via `response_format`:
@@ -144,12 +166,12 @@ response_format = {
     "json_schema": {
         "name": "modela_output",
         "strict": True,
-        "schema": output_schema,
+        "schema": coerced_schema,  # schema after strict-mode normalisation
     }
 }
 ```
 
-This is merged into the request before forwarding. The `extra_body` field (PRD 0001) still applies on top.
+This is merged into the request before forwarding. If `extra_body` (PRD 0001) also contains a `response_format` key, the structured output injection takes precedence and the `extra_body` value is discarded for that key.
 
 ### Validation
 
@@ -178,6 +200,7 @@ The `output_schema` field on ModelConfig (introduced in PRD 0001) is now activel
 - Request with `output_schema` returns a validated JSON object in `content`
 - ModelConfig `output_schema` takes precedence over request-level schema
 - Invalid schema in request body returns `422` before hitting the provider
+- Schema using `$ref`, `oneOf`, or `allOf` returns `422` with a clear unsupported-keyword message
 - Non-conforming provider response returns `502` with `validation_errors`
 - Free-form requests (no schema anywhere) are unaffected
 - All new code has test coverage including schema validation edge cases
@@ -208,8 +231,14 @@ HTTP status: `422`.
 - Request `output_schema` is used when `ModelConfig.output_schema` is null
 - Neither set → free-form response, no schema validation attempted
 
+**OpenAI strict mode coercion**
+- Schema missing `additionalProperties: false` is normalised before forwarding
+- Schema with all properties already in `required` is forwarded unchanged
+- Schema using `$ref`, `oneOf`, or `allOf` returns `422` before hitting provider
+
 **OpenAI injection**
 - `response_format` with the correct JSON Schema is forwarded to the provider when `output_schema` is active
+- `extra_body.response_format` is overridden by the injected structured output `response_format`
 - Conforming provider response returns parsed JSON object in `choices[0].message.content`
 
 **Validation**

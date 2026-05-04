@@ -9,7 +9,7 @@ class ModelConfigBase(BaseModel):
     name: str = Field(..., max_length=255)
     provider: str = Field(..., max_length=100)
     model: str = Field(..., max_length=255)
-    system_prompt: Optional[str] = None
+    system_prompt_id: Optional[UUID] = None
     temperature: Optional[float] = Field(None, ge=0.0, le=2.0)
     max_tokens: Optional[int] = Field(None, gt=0)
     top_p: Optional[float] = Field(None, ge=0.0, le=1.0)
@@ -23,7 +23,7 @@ class ModelConfigCreate(ModelConfigBase):
 
 class ModelConfigUpdate(BaseModel):
     name: Optional[str] = Field(None, max_length=255)
-    system_prompt: Optional[str] = None
+    system_prompt_id: Optional[UUID] = None
     temperature: Optional[float] = Field(None, ge=0.0, le=2.0)
     max_tokens: Optional[int] = Field(None, gt=0)
     top_p: Optional[float] = Field(None, ge=0.0, le=1.0)

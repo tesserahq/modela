@@ -1,5 +1,15 @@
 import uuid
-from sqlalchemy import Column, String, Boolean, Integer, Float, Text, Index, text
+from sqlalchemy import (
+    Column,
+    String,
+    Boolean,
+    Integer,
+    Float,
+    Text,
+    Index,
+    ForeignKey,
+    text,
+)
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from app.db import Base
 from app.models.mixins import TimestampMixin, SoftDeleteMixin
@@ -21,7 +31,11 @@ class ModelConfig(Base, TimestampMixin, SoftDeleteMixin):
     name = Column(String(255), nullable=False)
     provider = Column(String(100), nullable=False)
     model = Column(String(255), nullable=False)
-    system_prompt = Column(Text, nullable=True)
+    system_prompt_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("system_prompts.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
     temperature = Column(Float, nullable=True)
     max_tokens = Column(Integer, nullable=True)
     top_p = Column(Float, nullable=True)

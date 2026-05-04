@@ -9,6 +9,7 @@ from app.exceptions.resource_not_found_error import ResourceNotFoundError
 from app.gateway.modela_model import ModelaModel
 from app.providers.registry import get_adapter
 from app.repositories.model_config_repository import ModelConfigRepository
+from app.repositories.system_prompt_repository import SystemPromptRepository
 from app.schemas.completion import CompletionCreate, CompletionResponse
 
 logger = logging.getLogger(__name__)
@@ -28,8 +29,12 @@ class CreateCompletionCommand:
         inner = adapter.create_model(config.model)
         model = ModelaModel(inner, config, project_id, request_id)
 
-        system_prompt = config.system_prompt or None
-        agent: Agent[None, str] = Agent(model=model, instructions=system_prompt)
+        system_prompt_content = None
+        if config.system_prompt_id is not None:
+            system_prompt_content = SystemPromptRepository(
+                self.db
+            ).get_current_content_by_id(config.system_prompt_id)
+        agent: Agent[None, str] = Agent(model=model, instructions=system_prompt_content)
 
         messages, user_prompt = _split_messages(payload.messages)
 

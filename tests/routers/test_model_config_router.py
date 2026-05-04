@@ -110,3 +110,22 @@ def test_create_sets_default_clears_previous(
     assert response.status_code == 201
     previous = ModelConfigRepository(db).get_by_slug(existing_config.slug)
     assert previous.is_default is False
+
+
+def test_create_model_config_invalid_payload_returns_422(client: TestClient):
+    response = client.post(
+        "/model-configs",
+        json={"slug": "x", "name": "Missing provider and model fields"},
+    )
+
+    assert response.status_code == 422
+
+
+def test_list_model_configs_response_is_paginated(client: TestClient, existing_config):
+    response = client.get("/model-configs")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert "items" in data
+    assert "total" in data
+    assert data["total"] >= 1
