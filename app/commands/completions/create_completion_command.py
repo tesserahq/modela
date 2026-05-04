@@ -1,6 +1,9 @@
 import logging
 import time
 import uuid
+from typing import Optional
+from uuid import UUID
+
 from sqlalchemy.orm import Session
 from pydantic_ai import Agent
 from pydantic_ai.messages import ModelRequest, ModelResponse, UserPromptPart, TextPart
@@ -8,9 +11,12 @@ from pydantic_ai.messages import ModelRequest, ModelResponse, UserPromptPart, Te
 from app.exceptions.resource_not_found_error import ResourceNotFoundError
 from app.gateway.modela_model import ModelaModel
 from app.providers.registry import get_adapter
+from app.repositories.mcp_tool_catalog_repository import MCPToolCatalogRepository
 from app.repositories.model_config_repository import ModelConfigRepository
 from app.repositories.system_prompt_repository import SystemPromptRepository
 from app.schemas.completion import CompletionCreate, CompletionResponse
+from app.services.mcp.mcp_toolset import MCPToolset
+from app.services.mcp.tool_executor import MCPToolExecutor
 
 logger = logging.getLogger(__name__)
 
@@ -21,9 +27,18 @@ class CreateCompletionCommand:
         self.repo = ModelConfigRepository(db)
 
     async def execute(
-        self, payload: CompletionCreate, project_id: str, request_id: str
+        self,
+        payload: CompletionCreate,
+        project_id: str,
+        request_id: str,
+        *,
+        user_id: UUID,
     ) -> CompletionResponse:
         config = self._resolve_config(payload.model)
+
+        tools = await MCPToolCatalogRepository(self.db).get_tools_for_model_config(
+            config.id, user_id=user_id
+        )
 
         adapter = get_adapter(config.provider)
         inner = adapter.create_model(config.model)
@@ -38,7 +53,14 @@ class CreateCompletionCommand:
 
         messages, user_prompt = _split_messages(payload.messages)
 
-        result = await agent.run(user_prompt, message_history=messages)
+        run_kwargs: dict = {"message_history": messages}
+        if tools:
+            executor = MCPToolExecutor(self.db)
+            run_kwargs["toolsets"] = [MCPToolset(tools, executor, user_id=user_id)]
+        if config.max_tool_rounds is not None:
+            run_kwargs["max_result_retries"] = config.max_tool_rounds
+
+        result = await agent.run(user_prompt, **run_kwargs)
 
         usage = result.usage()
         return CompletionResponse(

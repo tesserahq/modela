@@ -4,6 +4,10 @@ from uuid import UUID
 from datetime import datetime
 
 
+class MCPServerAttachRequest(BaseModel):
+    server_id: UUID
+
+
 class ModelConfigBase(BaseModel):
     slug: str = Field(..., max_length=255)
     name: str = Field(..., max_length=255)
@@ -15,6 +19,7 @@ class ModelConfigBase(BaseModel):
     top_p: Optional[float] = Field(None, ge=0.0, le=1.0)
     output_schema: Optional[dict[str, Any]] = None
     is_default: bool = False
+    max_tool_rounds: Optional[int] = Field(None, ge=1, le=50)
 
 
 class ModelConfigCreate(ModelConfigBase):
@@ -29,6 +34,7 @@ class ModelConfigUpdate(BaseModel):
     top_p: Optional[float] = Field(None, ge=0.0, le=1.0)
     output_schema: Optional[dict[str, Any]] = None
     is_default: Optional[bool] = None
+    max_tool_rounds: Optional[int] = Field(None, ge=1, le=50)
 
 
 class ModelConfigResponse(ModelConfigBase):

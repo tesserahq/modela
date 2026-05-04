@@ -5,9 +5,11 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
+from sqlalchemy import Select, select
 from sqlalchemy.orm import Query, Session
 
 from app.models.mcp_server import MCPServer
+from app.models.model_config import model_config_mcp_servers
 from app.schemas.mcp_server import MCPServerCreate, MCPServerUpdate
 from app.repositories.soft_delete_repository import SoftDeleteRepository
 from app.utils.db.filtering import apply_filters
@@ -44,6 +46,21 @@ class MCPServerRepository(SoftDeleteRepository[MCPServer]):
     def get_mcp_servers_query(self) -> Query[MCPServer]:
         """Get a query for MCP servers (for pagination)."""
         return self.db.query(MCPServer).order_by(MCPServer.server_id)
+
+    def list_query_for_model_config(self, model_config_id: UUID) -> Select:
+        """Return a select statement of non-deleted servers attached to a ModelConfig."""
+        return (
+            select(MCPServer)
+            .join(
+                model_config_mcp_servers,
+                MCPServer.id == model_config_mcp_servers.c.mcp_server_id,
+            )
+            .where(
+                model_config_mcp_servers.c.model_config_id == model_config_id,
+                MCPServer.deleted_at.is_(None),
+            )
+            .order_by(MCPServer.server_id)
+        )
 
     def get_enabled_servers(self) -> List[MCPServer]:
         """Return enabled MCP servers, ordered by server_id."""

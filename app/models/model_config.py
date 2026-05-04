@@ -1,18 +1,38 @@
 import uuid
 from sqlalchemy import (
     Column,
+    DateTime,
     String,
     Boolean,
     Integer,
     Float,
-    Text,
     Index,
     ForeignKey,
+    Table,
     text,
 )
 from sqlalchemy.dialects.postgresql import UUID, JSONB
+from sqlalchemy.orm import relationship
 from app.db import Base
 from app.models.mixins import TimestampMixin, SoftDeleteMixin
+
+model_config_mcp_servers = Table(
+    "model_config_mcp_servers",
+    Base.metadata,
+    Column(
+        "model_config_id",
+        UUID(as_uuid=True),
+        ForeignKey("model_configs.id"),
+        primary_key=True,
+    ),
+    Column(
+        "mcp_server_id",
+        UUID(as_uuid=True),
+        ForeignKey("mcp_servers.id"),
+        primary_key=True,
+    ),
+    Column("created_at", DateTime(), nullable=False, server_default=text("now()")),
+)
 
 
 class ModelConfig(Base, TimestampMixin, SoftDeleteMixin):
@@ -41,3 +61,10 @@ class ModelConfig(Base, TimestampMixin, SoftDeleteMixin):
     top_p = Column(Float, nullable=True)
     output_schema = Column(JSONB, nullable=True)
     is_default = Column(Boolean, nullable=False, default=False, index=True)
+    max_tool_rounds = Column(Integer, nullable=True)
+
+    mcp_servers = relationship(
+        "MCPServer",
+        secondary=model_config_mcp_servers,
+        lazy="select",
+    )
