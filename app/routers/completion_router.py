@@ -16,16 +16,19 @@ _rbac = build_rbac_dependencies(resource=RBAC_RESOURCE, project_resolver=infer_p
 @router.post(
     "/chat/completions",
     response_model=CompletionResponse,
-    dependencies=[Depends(_rbac["create"]), Depends(get_current_user)],
+    dependencies=[Depends(_rbac["create"])],
 )
 async def create_completion(
     payload: CompletionCreate,
     response: Response,
     project_id: str = Depends(infer_project),
     db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
 ):
     request_id = str(uuid.uuid4())
-    result = await CreateCompletionCommand(db).execute(payload, project_id, request_id)
+    result = await CreateCompletionCommand(db).execute(
+        payload, project_id, request_id, user_id=current_user.id
+    )
     response.headers["X-Modela-Config-Slug"] = result.model
     response.headers["X-Modela-Request-Id"] = request_id
     return result

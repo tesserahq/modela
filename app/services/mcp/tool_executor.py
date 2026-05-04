@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.infra.logging_config import get_logger
 from app.services.mcp.client_factory import client_context
-from app.repositories.credential_applier import CredentialApplier
+from app.services.credential_applier import CredentialApplier
 from app.repositories.mcp_server_repository import MCPServerRepository
 
 logger = get_logger(__name__)
