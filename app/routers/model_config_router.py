@@ -3,7 +3,6 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, status
 from fastapi_pagination import Page
 from fastapi_pagination.ext.sqlalchemy import paginate
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.auth.rbac import build_rbac_dependencies, infer_domain
@@ -18,8 +17,7 @@ from app.commands.model_configs.delete_model_config_command import (
 )
 from app.db import get_db
 from app.exceptions.resource_not_found_error import ResourceNotFoundError
-from app.models.mcp_server import MCPServer
-from app.models.model_config import ModelConfig, model_config_mcp_servers
+from app.models.model_config import ModelConfig
 from app.repositories.mcp_server_repository import MCPServerRepository
 from app.repositories.model_config_repository import ModelConfigRepository
 from app.routers.utils.dependencies import get_model_config_by_id
@@ -141,16 +139,5 @@ def list_attached_mcp_servers(
     config: ModelConfig = Depends(get_model_config_by_id),
     db: Session = Depends(get_db),
 ):
-    query = (
-        select(MCPServer)
-        .join(
-            model_config_mcp_servers,
-            MCPServer.id == model_config_mcp_servers.c.mcp_server_id,
-        )
-        .where(
-            model_config_mcp_servers.c.model_config_id == config.id,
-            MCPServer.deleted_at.is_(None),
-        )
-        .order_by(MCPServer.server_id)
-    )
+    query = MCPServerRepository(db).list_query_for_model_config(config.id)
     return paginate(db, query)
