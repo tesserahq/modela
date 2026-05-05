@@ -7,7 +7,6 @@ from sqlalchemy.orm import Session
 
 from app.repositories.model_config_repository import ModelConfigRepository
 
-
 SENTIMENT_SCHEMA = {
     "type": "object",
     "properties": {
@@ -117,7 +116,9 @@ def test_plain_config_still_returns_string_content(
         )
 
     assert response.status_code == 200
-    assert response.json()["choices"][0]["message"]["content"] == "Hello from the model."
+    assert (
+        response.json()["choices"][0]["message"]["content"] == "Hello from the model."
+    )
 
 
 def test_provider_validation_failure_returns_502(

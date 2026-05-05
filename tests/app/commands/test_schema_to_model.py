@@ -3,8 +3,8 @@ from fastapi import HTTPException
 
 from app.commands.completions.schema_to_model import schema_to_model
 
-
 # --- valid schemas ---
+
 
 def test_scalar_fields_map_to_correct_types():
     schema = {
@@ -51,7 +51,10 @@ def test_string_enum_becomes_literal():
     schema = {
         "type": "object",
         "properties": {
-            "sentiment": {"type": "string", "enum": ["positive", "negative", "neutral"]},
+            "sentiment": {
+                "type": "string",
+                "enum": ["positive", "negative", "neutral"],
+            },
         },
         "required": ["sentiment"],
     }
@@ -103,6 +106,7 @@ def test_model_dump_returns_dict():
 
 
 # --- invalid schemas: 422 ---
+
 
 def test_non_object_top_level_raises_422():
     with pytest.raises(HTTPException) as exc_info:

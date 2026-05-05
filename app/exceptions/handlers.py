@@ -4,7 +4,9 @@ from fastapi.responses import JSONResponse
 from app.exceptions.conflict_error import ConflictError
 from app.exceptions.resource_not_found_error import ResourceNotFoundError
 from app.exceptions.provider_errors import ProviderError, ProviderTimeoutError
-from app.exceptions.structured_output_validation_error import StructuredOutputValidationError
+from app.exceptions.structured_output_validation_error import (
+    StructuredOutputValidationError,
+)
 
 
 def register_exception_handlers(app: FastAPI) -> None:
@@ -23,7 +25,9 @@ def register_exception_handlers(app: FastAPI) -> None:
         )
 
     @app.exception_handler(StructuredOutputValidationError)
-    async def structured_output_validation_handler(request: Request, exc: StructuredOutputValidationError):
+    async def structured_output_validation_handler(
+        request: Request, exc: StructuredOutputValidationError
+    ):
         return JSONResponse(
             status_code=status.HTTP_502_BAD_GATEWAY,
             content={

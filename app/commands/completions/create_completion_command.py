@@ -11,7 +11,9 @@ from sqlalchemy.orm import Session
 from app.commands.completions.schema_to_model import schema_to_model
 from app.exceptions.provider_errors import ProviderError
 from app.exceptions.resource_not_found_error import ResourceNotFoundError
-from app.exceptions.structured_output_validation_error import StructuredOutputValidationError
+from app.exceptions.structured_output_validation_error import (
+    StructuredOutputValidationError,
+)
 from app.gateway.modela_model import ModelaModel
 from app.providers.registry import get_adapter
 from app.repositories.mcp_tool_catalog_repository import MCPToolCatalogRepository
@@ -20,7 +22,13 @@ from app.repositories.system_prompt_repository import SystemPromptRepository
 from app.schemas.completion import CompletionCreate, CompletionResponse
 from app.services.mcp.mcp_toolset import MCPToolset
 from app.services.mcp.tool_executor import MCPToolExecutor
-from pydantic_ai.messages import ModelRequest, ModelResponse, UserPromptPart, TextPart, SystemPromptPart
+from pydantic_ai.messages import (
+    ModelRequest,
+    ModelResponse,
+    UserPromptPart,
+    TextPart,
+    SystemPromptPart,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -67,7 +75,9 @@ class CreateCompletionCommand:
 
         run_kwargs: dict = {"message_history": messages}
         if system_prompt_content is not None:
-            system_message = ModelRequest(parts=[SystemPromptPart(content=system_prompt_content)])
+            system_message = ModelRequest(
+                parts=[SystemPromptPart(content=system_prompt_content)]
+            )
             run_kwargs["message_history"] = [system_message] + messages
         if tools:
             executor = MCPToolExecutor(self.db)
