@@ -1,5 +1,5 @@
 from typing import Any, Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class MessageInput(BaseModel):
@@ -9,13 +9,13 @@ class MessageInput(BaseModel):
 
 class CompletionCreate(BaseModel):
     model: Optional[str] = None
-    messages: list[MessageInput]
+    messages: list[MessageInput] = Field(min_length=1)
     extra_body: Optional[dict[str, Any]] = None
 
 
 class CompletionChoice(BaseModel):
     index: int
-    message: dict[str, str]
+    message: dict[str, Any]
     finish_reason: str
 
 

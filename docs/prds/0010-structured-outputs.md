@@ -1,10 +1,10 @@
 # PRD 0010 — Structured Outputs
 
-> **Status:** Deferred — not needed immediately. Implement after PRDs 0001–0009 are complete.
+> **Status:** Ready to implement.
 
 ## Overview
 
-This phase adds structured output support: the ability to request a JSON response conforming to a specific schema, validated by Modela before returning to the caller. The schema can be defined on the **ModelConfig** (authoritative, always enforced) or supplied ad-hoc in the request (used only when the ModelConfig has no `output_schema`).
+This phase adds structured output support: the ability to enforce a JSON Schema on the response returned by a ModelConfig. When `output_schema` is set on a ModelConfig, Modela builds a dynamic Pydantic model from the schema, passes it to pydantic-ai as `result_type`, and returns the validated JSON object to the caller.
 
 ---
 
@@ -12,42 +12,34 @@ This phase adds structured output support: the ability to request a JSON respons
 
 - Allow callers to receive validated, schema-conforming JSON responses from any LLM
 - Enforce `output_schema` from ModelConfig when present
-- Accept `output_schema` in the request body as a fallback when ModelConfig has none
 - Return a structured validation error if the provider response does not conform
-- Inject the schema into the provider request using the appropriate provider mechanism
 
 ---
 
 ## Non-Goals
 
-- Per-request override when ModelConfig already defines an `output_schema` (config is authoritative)
+- Per-request `output_schema` in the request body — deferred; ModelConfig is the only source in this pass
 - Automatic schema generation from Python type annotations (caller-side concern)
 - Coercing or auto-correcting non-conforming responses (fail fast, don't guess)
 - Multi-provider structured output (covered in PRD 0003 for each new provider)
-- Simplified schema form (flat `{"field": "type"}` objects) — callers must submit valid JSON Schema Draft 7 directly
+- Complex schema support (`$ref`, `oneOf`, `allOf`, `anyOf`) — callers must use flat, fully-inlined object schemas; these keywords return `422` with a clear message
 - Streaming structured output — streaming is not yet implemented in Modela; this PRD applies to non-streaming only
 
 ---
 
 ## Background
 
-Structured outputs remove the need for callers to parse or validate LLM responses themselves. Modela becomes the single enforcement point: inject the schema into the provider request, receive the response, validate it, and return clean JSON or a clear error.
+Structured outputs remove the need for callers to parse or validate LLM responses themselves. Modela becomes the single enforcement point: convert the schema to a Pydantic model, pass it to pydantic-ai as `result_type`, receive the validated response, and return clean JSON or a clear error.
 
-The schema definition introduced on `ModelConfig.output_schema` in PRD 0001 was stored but not enforced. This PRD activates it.
+The `output_schema` field on `ModelConfig` was introduced in PRD 0001 and stored but not enforced. This PRD activates it.
 
-**Modela validates even when the provider guarantees conformance** (e.g. OpenAI strict mode) as a defense-in-depth measure. This ensures consistent behaviour when future providers are added that do not offer native schema enforcement.
-
-**Resolution order:**
-
-1. If `ModelConfig.output_schema` is set → use it (authoritative, request-level schema ignored)
-2. Else if request body contains `output_schema` → use it
-3. Else → no structured output, return free-form text as normal
+pydantic-ai's `result_type` mechanism handles provider-specific injection (OpenAI uses `response_format: {type: "json_schema", strict: true}`) and response validation. Modela does not implement provider injection or schema coercion manually.
 
 ---
 
 ## Schema Format
 
-Schemas are expressed as **JSON Schema (Draft 7)** objects.
+Schemas are expressed as **JSON Schema (Draft 7)** objects. Only flat object schemas are supported in this pass: top-level `type: object` with scalar or array properties. Nested objects are allowed. The keywords `$ref`, `oneOf`, `allOf`, and `anyOf` are not supported and return `422`.
 
 Example:
 
@@ -70,31 +62,13 @@ Example:
 
 ## API Changes
 
-### `POST /chat/completions` — updated request body
+### `POST /chat/completions` — no request body changes
 
-```json
-{
-  "model": "openai-gpt-4o",
-  "messages": [{ "role": "user", "content": "Analyse the review." }],
-  "output_schema": {
-    "type": "object",
-    "properties": {
-      "sentiment": {
-        "type": "string",
-        "enum": ["positive", "negative", "neutral"]
-      },
-      "confidence": { "type": "number" }
-    },
-    "required": ["sentiment", "confidence"]
-  }
-}
-```
-
-`output_schema` is ignored if `ModelConfig.output_schema` is already set.
+Per-request `output_schema` in the request body is deferred. The schema comes from `ModelConfig.output_schema` only.
 
 ### Response — structured output
 
-When a schema is active, the response `content` is a parsed JSON object:
+When a schema is active, `choices[0].message.content` is a parsed JSON object instead of a string. `CompletionChoice.message` is widened from `dict[str, str]` to `dict[str, Any]` to accommodate this.
 
 ```json
 {
@@ -115,13 +89,13 @@ When a schema is active, the response `content` is a parsed JSON object:
 
 ### Errors
 
-| Code  | Condition                                              |
-| ----- | ------------------------------------------------------ |
-| `422` | `output_schema` in request is not valid JSON Schema Draft 7 |
-| `422` | `output_schema` uses unsupported keywords (`$ref`, `oneOf`, `allOf`) — see OpenAI Strict Mode Coercion below |
-| `502` | Provider returned output that failed schema validation |
+| Code  | Condition                                                                 |
+| ----- | ------------------------------------------------------------------------- |
+| `422` | `output_schema` uses unsupported keywords (`$ref`, `oneOf`, `allOf`, `anyOf`) |
+| `422` | `output_schema` is not a valid flat object schema (e.g. top-level type is not `object`) |
+| `502` | Provider returned output that failed schema validation                    |
 
-The `502` body includes a `validation_errors` field with the JSON Schema validation failures, so callers can debug prompt/schema mismatches.
+The `502` body includes a `validation_errors` field with the Pydantic validation failures so callers can debug prompt/schema mismatches.
 
 ```json
 {
@@ -141,110 +115,79 @@ The `502` body includes a `validation_errors` field with the JSON Schema validat
 
 ## Implementation
 
-### OpenAI Strict Mode Coercion
+### JSON Schema → Pydantic model conversion
 
-OpenAI's `strict: True` mode requires schemas to meet rules beyond valid JSON Schema:
+The core new logic is a translator function that converts a flat JSON Schema dict into a `pydantic.create_model()` call. This is the only genuinely new code in this PRD — implement and test it in isolation before wiring it into the command.
 
-- Every `object` must have `"additionalProperties": false`
-- Every property of every `object` must appear in `"required"`
-- The keywords `$ref`, `oneOf`, `allOf`, and `anyOf` (except for nullable unions) are not supported
+**Supported type mappings:**
 
-Before forwarding to OpenAI, Modela normalises the schema with a single recursive pass over `object` types:
+| JSON Schema type          | Python type        |
+| ------------------------- | ------------------ |
+| `"string"`                | `str`              |
+| `"number"`                | `float`            |
+| `"integer"`               | `int`              |
+| `"boolean"`               | `bool`             |
+| `"array"` (items: scalar) | `list[<item_type>]`|
+| `"object"` (nested)       | recursive          |
 
-1. Add `"additionalProperties": false` if absent
-2. Move all defined properties into `"required"` if not already present
+Fields listed in `"required"` are non-optional. Fields not in `"required"` get a default of `None` and are typed `Optional[T]`.
 
-**Scope limit:** coercion applies to top-level and nested `object` nodes only. Schemas that use `$ref`, `oneOf`, or `allOf` are rejected with `422` and a message directing the caller to use a flat, fully-inlined schema. This restriction may be lifted in a future phase.
+Schemas using `$ref`, `oneOf`, `allOf`, or `anyOf` at any level of nesting are rejected with `422` before reaching the provider.
 
-### OpenAI Provider Injection
+`"enum"` on string fields is validated post-response via Pydantic's `Literal` type. `"minimum"` / `"maximum"` constraints are not enforced in v1 (the provider response is accepted if the type matches).
 
-OpenAI supports structured outputs via `response_format`:
+### pydantic-ai integration
 
-```python
-response_format = {
-    "type": "json_schema",
-    "json_schema": {
-        "name": "modela_output",
-        "strict": True,
-        "schema": coerced_schema,  # schema after strict-mode normalisation
-    }
-}
-```
+In `CreateCompletionCommand.execute`:
 
-This is merged into the request before forwarding. If `extra_body` (PRD 0001) also contains a `response_format` key, the structured output injection takes precedence and the `extra_body` value is discarded for that key.
+1. After resolving `config`, check if `config.output_schema` is set.
+2. If set: call the translator to build a dynamic Pydantic model. If the schema is unsupported, raise `422` immediately.
+3. Construct the Agent with `result_type=dynamic_model` instead of the default `str`.
+4. After `agent.run(...)`, call `result.output.model_dump()` and place the dict in `choices[0].message.content`.
+5. If pydantic-ai raises a validation error on the provider response, catch it and raise `StructuredOutputValidationError` → `502`.
 
-### Validation
+When `output_schema` is not set, the Agent is constructed as today (`result_type` defaults to `str`) and the response is unaffected.
 
-After receiving the provider response:
+### Tool use compatibility
 
-1. Parse `choices[0].message.content` as JSON
-2. Validate against the resolved schema using `jsonschema` (Python library)
-3. On success: replace the string content with the parsed dict in the response
-4. On failure: raise `StructuredOutputValidationError` → return `502` with validation details
+**No incompatibility guard is needed.** pydantic-ai's `result_type` mechanism applies the schema to the final assistant response after all tool-call rounds are complete. Structured outputs and MCP tools can coexist on the same ModelConfig. The Amendment in the original PRD draft is superseded by this approach.
 
 ### ModelConfig admin update
 
-The `output_schema` field on ModelConfig (introduced in PRD 0001) is now actively enforced. The CRUD API already supports reading/writing it. No schema changes required.
+The `output_schema` field on ModelConfig (introduced in PRD 0001) is now actively enforced. The CRUD API already supports reading/writing it. No schema or migration changes required.
 
 ---
 
 ## Dependencies
 
 - PRD 0001 (foundation, ModelConfig, OpenAI adapter)
-- `jsonschema` Python library (new dependency)
+- pydantic-ai (already in use — no new dependency)
+- No `jsonschema` library required
 
 ---
 
 ## Success Criteria
 
-- Request with `output_schema` returns a validated JSON object in `content`
-- ModelConfig `output_schema` takes precedence over request-level schema
-- Invalid schema in request body returns `422` before hitting the provider
+- ModelConfig with `output_schema` returns a validated JSON object in `choices[0].message.content`
+- Free-form requests (no `output_schema` on ModelConfig) are unaffected
 - Schema using `$ref`, `oneOf`, or `allOf` returns `422` with a clear unsupported-keyword message
 - Non-conforming provider response returns `502` with `validation_errors`
-- Free-form requests (no schema anywhere) are unaffected
-- All new code has test coverage including schema validation edge cases
-
----
-
-## Amendment — PRD 0008 Interaction
-
-**`output_schema` + tool use is mutually exclusive.** When PRD 0008 ships, if a request has an active `output_schema` (from ModelConfig or the request body) and tools are available for that request, Modela returns:
-
-```json
-{
-  "error": "IncompatibleOptions",
-  "message": "Structured outputs and tool use cannot be combined."
-}
-```
-
-HTTP status: `422`.
-
-**Why:** Anthropic's structured output mechanism injects a synthetic tool definition; adding real MCP tools alongside it produces ambiguous tool selection. For all providers, applying a JSON Schema constraint to a response that may be preceded by multiple tool-call rounds is undefined behaviour — the schema would need to apply to the final assistant turn only, which requires mid-loop schema awareness not yet designed. This restriction will be lifted in a future phase once the interaction is fully specified.
+- ModelConfig with both `output_schema` and MCP tools attached works correctly — tool rounds complete, then schema is applied to the final response
+- All new code has test coverage including schema conversion edge cases
 
 ---
 
 ## Testing
 
-**Schema resolution**
-- `ModelConfig.output_schema` takes precedence over request-level `output_schema`
-- Request `output_schema` is used when `ModelConfig.output_schema` is null
-- Neither set → free-form response, no schema validation attempted
+**Schema conversion (unit tests — test the translator in isolation)**
+- Scalar fields map to correct Python types
+- Fields not in `required` become `Optional[T]` with default `None`
+- Nested object schemas produce nested Pydantic models
+- `$ref`, `oneOf`, `allOf`, `anyOf` raise `422` before any provider call
+- Non-object top-level schema raises `422`
 
-**OpenAI strict mode coercion**
-- Schema missing `additionalProperties: false` is normalised before forwarding
-- Schema with all properties already in `required` is forwarded unchanged
-- Schema using `$ref`, `oneOf`, or `allOf` returns `422` before hitting provider
-
-**OpenAI injection**
-- `response_format` with the correct JSON Schema is forwarded to the provider when `output_schema` is active
-- `extra_body.response_format` is overridden by the injected structured output `response_format`
-- Conforming provider response returns parsed JSON object in `choices[0].message.content`
-
-**Validation**
+**Integration**
+- ModelConfig with `output_schema` returns parsed JSON object in `choices[0].message.content`
+- ModelConfig without `output_schema` returns string content as before
 - Non-conforming provider response returns `502` with `validation_errors` array and `raw_content`
-- Invalid `output_schema` in request body (not valid JSON Schema) returns `422` before hitting provider
-- Valid schema with extra provider fields in response that don't break validation still passes
-
-**PRD 0008 incompatibility**
-- Request with active `output_schema` and non-empty `tools` field returns `422 IncompatibleOptions`
+- ModelConfig with `output_schema` AND MCP tools attached completes tool rounds and applies schema to final response
