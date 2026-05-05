@@ -1,4 +1,4 @@
-"""Command to update a system prompt (rename)."""
+"""Command to update a system prompt and conditionally create a new version."""
 
 from __future__ import annotations
 
@@ -17,7 +17,8 @@ from tessera_sdk.infra.events.nats_router import NatsEventPublisher  # type: ign
 
 class UpdateSystemPromptCommand:
     """
-    Command to update a system prompt (e.g. rename) and publish system_prompt.updated event.
+    Command to update a system prompt attributes and conditionally create a new current version
+    and publish system_prompt.updated event.
     """
 
     def __init__(
@@ -26,7 +27,7 @@ class UpdateSystemPromptCommand:
         nats_publisher: Optional[NatsEventPublisher] = None,
     ):
         self.db = db
-        self.system_prompt_service = SystemPromptRepository(db)
+        self.system_prompt_repository = SystemPromptRepository(db)
         self.nats_publisher = (
             nats_publisher if nats_publisher is not None else NatsEventPublisher()
         )
@@ -34,16 +35,18 @@ class UpdateSystemPromptCommand:
 
     def execute(
         self,
-        name: str,
+        prompt_id: UUID,
         data: SystemPromptUpdate,
         updated_by_id: Optional[UUID] = None,
     ) -> Optional[SystemPrompt]:
         """
-        Execute the command to update a system prompt and publish the event.
+        Execute the command to update prompt attributes, create a new version only when
+        content changes, and publish the event.
+        and publish the event.
 
         Args:
-            name: Current name of the system prompt.
-            data: The update data (e.g. new name).
+            prompt_id: ID of the system prompt to update.
+            data: The update data (name and/or content).
             updated_by_id: Optional user ID of the updater.
 
         Returns:
@@ -52,7 +55,30 @@ class UpdateSystemPromptCommand:
         Raises:
             ValueError: If new name already exists.
         """
-        prompt = self.system_prompt_service.update_prompt_name(name, new_name=data.name)
+        prompt = self.system_prompt_repository.get_system_prompt_by_id(prompt_id)
+        if prompt is None:
+            return None
+
+        if data.name is not None:
+            prompt = self.system_prompt_repository.update_prompt_name_by_id(
+                prompt_id, new_name=data.name
+            )
+            if prompt is None:
+                return None
+
+        current_content = self.system_prompt_repository.get_current_content_by_id(
+            prompt_id
+        )
+        if data.content is not None and data.content != (current_content or ""):
+            version = self.system_prompt_repository.create_version(
+                prompt_id,
+                content=data.content,
+                note=data.note,
+            )
+            if version is None:
+                return None
+
+        prompt = self.system_prompt_repository.get_system_prompt_by_id(prompt_id)
         if prompt is not None:
             self._publish_system_prompt_updated_event(prompt, updated_by_id)
         return prompt

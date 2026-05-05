@@ -79,7 +79,7 @@ def test_create_version_first_version(db, faker):
 
     repo = SystemPromptRepository(db)
     new_content = "New markdown content"
-    version = repo.create_version(name, new_content, note="First")
+    version = repo.create_version(prompt.id, new_content, note="First")
 
     assert version is not None
     assert version.content == new_content
@@ -97,7 +97,7 @@ def test_create_version_second_version(db, setup_system_prompt):
     prompt = setup_system_prompt
     repo = SystemPromptRepository(db)
     new_content = "Updated system prompt"
-    version = repo.create_version(prompt.name, new_content, note="Update")
+    version = repo.create_version(prompt.id, new_content, note="Update")
 
     assert version is not None
     assert version.content == new_content
@@ -112,9 +112,11 @@ def test_create_version_second_version(db, setup_system_prompt):
 
 
 def test_create_version_unknown_name_returns_none(db):
-    """create_version returns None when prompt name does not exist."""
+    """create_version returns None when prompt id does not exist."""
+    from uuid import uuid4
+
     repo = SystemPromptRepository(db)
-    version = repo.create_version("nonexistent", "content", note="x")
+    version = repo.create_version(uuid4(), "content", note="x")
     assert version is None
 
 

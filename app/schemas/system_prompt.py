@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class SystemPromptRead(BaseModel):
@@ -14,6 +14,7 @@ class SystemPromptRead(BaseModel):
     id: UUID
     name: str
     current_version_id: UUID | None
+    current_version: SystemPromptVersionRead | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -29,9 +30,22 @@ class SystemPromptCreate(BaseModel):
 
 
 class SystemPromptUpdate(BaseModel):
-    """Request schema for updating a system prompt (e.g. rename)."""
+    """Request schema for updating a system prompt metadata and/or current content."""
 
-    name: str = Field(..., min_length=1, max_length=64)
+    name: str | None = Field(None, min_length=1, max_length=64)
+    content: str | None = Field(
+        None, description="Optional markdown body for a new current version"
+    )
+    note: str | None = Field(
+        None, max_length=512, description="Optional change note for the new version"
+    )
+
+    @model_validator(mode="after")
+    def validate_has_mutation(self) -> "SystemPromptUpdate":
+        """Require at least one updatable field."""
+        if self.name is None and self.content is None:
+            raise ValueError("At least one of 'name' or 'content' must be provided")
+        return self
 
 
 class SystemPromptVersionRead(BaseModel):

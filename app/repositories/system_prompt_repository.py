@@ -72,9 +72,38 @@ class SystemPromptRepository:
         self.db.refresh(prompt)
         return prompt
 
+    def update_prompt_name_by_id(
+        self, prompt_id: UUID, new_name: str
+    ) -> Optional[SystemPrompt]:
+        """
+        Rename a system prompt by id. Returns the updated prompt or None if not found.
+        Raises ValueError if new_name is already used by another prompt.
+        """
+        prompt = self.get_system_prompt_by_id(prompt_id)
+        if prompt is None:
+            return None
+        if (
+            prompt.name != new_name
+            and self.get_system_prompt_by_name(new_name) is not None
+        ):
+            raise ValueError(f"System prompt with name {new_name!r} already exists")
+        setattr(prompt, "name", new_name)
+        self.db.commit()
+        self.db.refresh(prompt)
+        return prompt
+
     def delete_prompt(self, name: str) -> bool:
         """Delete a system prompt and all its versions. Returns True if deleted."""
         prompt = self.get_system_prompt_by_name(name)
+        if prompt is None:
+            return False
+        self.db.delete(prompt)
+        self.db.commit()
+        return True
+
+    def delete_prompt_by_id(self, prompt_id: UUID) -> bool:
+        """Delete a system prompt and all its versions by id. Returns True if deleted."""
+        prompt = self.get_system_prompt_by_id(prompt_id)
         if prompt is None:
             return False
         self.db.delete(prompt)
@@ -179,15 +208,15 @@ class SystemPromptRepository:
 
     def create_version(
         self,
-        name: str,
+        prompt_id: UUID,
         content: str,
         note: Optional[str] = None,
     ) -> Optional[SystemPromptVersion]:
         """
-        Create a new version for the given prompt and set it as current.
+        Create a new version for the given prompt id and set it as current.
         Returns the new version, or None if the prompt does not exist.
         """
-        prompt = self.get_system_prompt_by_name(name)
+        prompt = self.get_system_prompt_by_id(prompt_id)
         if prompt is None:
             return None
 

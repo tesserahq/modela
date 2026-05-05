@@ -1,7 +1,8 @@
 import uuid
 from datetime import datetime, timezone
-from sqlalchemy import Column, String, Text, Integer, DateTime, ForeignKey, Index
+from sqlalchemy import Column, DateTime, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import relationship
 from app.db import Base
 from app.models.mixins import TimestampMixin
 
@@ -39,4 +40,9 @@ class SystemPrompt(Base, TimestampMixin):
             name="fk_system_prompts_current_version_id",
         ),
         nullable=True,
+    )
+
+    current_version = relationship(
+        "SystemPromptVersion",
+        foreign_keys=[current_version_id],
     )

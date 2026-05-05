@@ -1,5 +1,7 @@
 """System prompts API: CRUD and version management with RBAC."""
 
+from uuid import UUID
+
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi_pagination import Page
 from fastapi_pagination.ext.sqlalchemy import paginate
@@ -72,38 +74,38 @@ def create_system_prompt(
 
 
 @router.get(
-    "/{name}",
+    "/{prompt_id}",
     response_model=SystemPromptRead,
 )
 def get_system_prompt(
-    name: str,
+    prompt_id: UUID,
     _authorized: bool = Depends(rbac_prompts["read"]),
     _current_user=Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> SystemPromptRead:
-    """Get a system prompt by name."""
+    """Get a system prompt by ID."""
     svc = SystemPromptRepository(db)
-    prompt = svc.get_system_prompt_by_name(name)
+    prompt = svc.get_system_prompt_by_id(prompt_id)
     if prompt is None:
         raise HTTPException(status_code=404, detail="System prompt not found")
     return prompt
 
 
-@router.patch(
-    "/{name}",
+@router.put(
+    "/{prompt_id}",
     response_model=SystemPromptRead,
 )
 def update_system_prompt(
-    name: str,
+    prompt_id: UUID,
     data: SystemPromptUpdate,
     _authorized: bool = Depends(rbac_prompts["update"]),
     _current_user=Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> SystemPromptRead:
-    """Update a system prompt (e.g. rename)."""
+    """Update a system prompt by ID (e.g. rename)."""
     command = UpdateSystemPromptCommand(db)
     prompt = command.execute(
-        name,
+        prompt_id,
         data,
         updated_by_id=getattr(_current_user, "id", None),
     )
@@ -113,19 +115,19 @@ def update_system_prompt(
 
 
 @router.delete(
-    "/{name}",
+    "/{prompt_id}",
     status_code=204,
 )
 def delete_system_prompt(
-    name: str,
+    prompt_id: UUID,
     _authorized: bool = Depends(rbac_prompts["delete"]),
     _current_user=Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> None:
-    """Delete a system prompt and all its versions."""
+    """Delete a system prompt by ID and all its versions."""
     command = DeleteSystemPromptCommand(db)
     if not command.execute(
-        name,
+        prompt_id,
         deleted_by_id=getattr(_current_user, "id", None),
     ):
         raise HTTPException(status_code=404, detail="System prompt not found")
@@ -186,7 +188,10 @@ def create_system_prompt_version(
 ) -> SystemPromptVersionRead:
     """Create a new version and set it as the current system prompt."""
     svc = SystemPromptRepository(db)
-    version = svc.create_version(name, content=data.content, note=data.note)
+    prompt = svc.get_system_prompt_by_name(name)
+    if prompt is None:
+        raise HTTPException(status_code=404, detail="System prompt not found")
+    version = svc.create_version(prompt.id, content=data.content, note=data.note)
     if version is None:
         raise HTTPException(status_code=404, detail="System prompt not found")
     return version

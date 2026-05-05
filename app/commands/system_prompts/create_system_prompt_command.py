@@ -26,7 +26,7 @@ class CreateSystemPromptCommand:
         nats_publisher: Optional[NatsEventPublisher] = None,
     ):
         self.db = db
-        self.system_prompt_service = SystemPromptRepository(db)
+        self.system_prompt_repository = SystemPromptRepository(db)
         self.nats_publisher = (
             nats_publisher if nats_publisher is not None else NatsEventPublisher()
         )
@@ -50,7 +50,7 @@ class CreateSystemPromptCommand:
         Raises:
             ValueError: If name already exists.
         """
-        prompt = self.system_prompt_service.create_prompt(
+        prompt = self.system_prompt_repository.create_prompt(
             name=data.name,
             initial_content=data.content,
             note=data.note,

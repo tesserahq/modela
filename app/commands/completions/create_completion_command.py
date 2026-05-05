@@ -17,6 +17,7 @@ from app.repositories.system_prompt_repository import SystemPromptRepository
 from app.schemas.completion import CompletionCreate, CompletionResponse
 from app.services.mcp.mcp_toolset import MCPToolset
 from app.services.mcp.tool_executor import MCPToolExecutor
+from pydantic_ai.messages import SystemPromptPart
 
 logger = logging.getLogger(__name__)
 
@@ -49,11 +50,16 @@ class CreateCompletionCommand:
             system_prompt_content = SystemPromptRepository(
                 self.db
             ).get_current_content_by_id(config.system_prompt_id)
-        agent: Agent[None, str] = Agent(model=model, instructions=system_prompt_content)
+        agent: Agent[None, str] = Agent(model=model)
+
+        system_message = ModelRequest(
+            parts=[SystemPromptPart(content=system_prompt_content)]
+        )
 
         messages, user_prompt = _split_messages(payload.messages)
 
-        run_kwargs: dict = {"message_history": messages}
+        run_kwargs: dict = {"message_history": [system_message] + messages}
+        print(run_kwargs)
         if tools:
             executor = MCPToolExecutor(self.db)
             run_kwargs["toolsets"] = [MCPToolset(tools, executor, user_id=user_id)]

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Optional
+from typing import Optional, cast
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -12,6 +12,7 @@ from app.events.system_prompt_events import build_system_prompt_deleted_event
 from app.exceptions.conflict_error import ConflictError
 from app.models.system_prompt import SystemPrompt
 from app.repositories.system_prompt_repository import SystemPromptRepository
+from tessera_sdk.infra.events.event import Event  # type: ignore[import-untyped]
 from tessera_sdk.infra.events.nats_router import NatsEventPublisher  # type: ignore[import-untyped]
 
 
@@ -34,40 +35,41 @@ class DeleteSystemPromptCommand:
 
     def execute(
         self,
-        name: str,
+        prompt_id: UUID,
         deleted_by_id: Optional[UUID] = None,
     ) -> bool:
         """
         Execute the command to delete a system prompt and publish the event.
 
         Args:
-            name: Name of the system prompt to delete.
+            prompt_id: ID of the system prompt to delete.
             deleted_by_id: Optional user ID of the deleter.
 
         Returns:
             True if the prompt was deleted, False if not found.
         """
-        prompt = self.system_prompt_service.get_system_prompt_by_name(name)
+        prompt = self.system_prompt_service.get_system_prompt_by_id(prompt_id)
         if prompt is None:
             return False
 
-        if self.system_prompt_service.is_referenced_by_model_config(prompt.id):
+        prompt_id = cast(UUID, prompt.id)
+
+        if self.system_prompt_service.is_referenced_by_model_config(prompt_id):
             raise ConflictError(
-                f"System prompt '{name}' is referenced by one or more ModelConfigs"
+                f"System prompt '{prompt.name}' is referenced by one or more ModelConfigs"
             )
 
-        ok = self.system_prompt_service.delete_prompt(name)
+        deletion_event = build_system_prompt_deleted_event(prompt, deleted_by_id)
+        ok = self.system_prompt_service.delete_prompt_by_id(prompt_id)
         if ok:
-            self._publish_system_prompt_deleted_event(prompt, deleted_by_id)
+            self._publish_system_prompt_deleted_event(deletion_event)
         return ok
 
     def _publish_system_prompt_deleted_event(
         self,
-        prompt: SystemPrompt,
-        deleted_by_id: Optional[UUID],
+        event: Event,
     ) -> None:
         """Publish a system_prompt.deleted event to NATS."""
-        event = build_system_prompt_deleted_event(prompt, deleted_by_id)
         if self.nats_publisher is not None:
             self.logger.info(
                 "Publishing system-prompt-deleted event to NATS: %s",
