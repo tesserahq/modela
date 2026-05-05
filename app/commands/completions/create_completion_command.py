@@ -4,11 +4,14 @@ import uuid
 from typing import Optional
 from uuid import UUID
 
-from sqlalchemy.orm import Session
 from pydantic_ai import Agent
-from pydantic_ai.messages import ModelRequest, ModelResponse, UserPromptPart, TextPart
+from pydantic_ai.exceptions import UnexpectedModelBehavior
+from sqlalchemy.orm import Session
 
+from app.commands.completions.schema_to_model import schema_to_model
+from app.exceptions.provider_errors import ProviderError
 from app.exceptions.resource_not_found_error import ResourceNotFoundError
+from app.exceptions.structured_output_validation_error import StructuredOutputValidationError
 from app.gateway.modela_model import ModelaModel
 from app.providers.registry import get_adapter
 from app.repositories.mcp_tool_catalog_repository import MCPToolCatalogRepository
@@ -17,7 +20,7 @@ from app.repositories.system_prompt_repository import SystemPromptRepository
 from app.schemas.completion import CompletionCreate, CompletionResponse
 from app.services.mcp.mcp_toolset import MCPToolset
 from app.services.mcp.tool_executor import MCPToolExecutor
-from pydantic_ai.messages import SystemPromptPart
+from pydantic_ai.messages import ModelRequest, ModelResponse, UserPromptPart, TextPart, SystemPromptPart
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +40,10 @@ class CreateCompletionCommand:
     ) -> CompletionResponse:
         config = self._resolve_config(payload.model)
 
+        result_model: Optional[type] = None
+        if config.output_schema:
+            result_model = schema_to_model(config.output_schema)
+
         tools = await MCPToolCatalogRepository(self.db).get_tools_for_model_config(
             config.id, user_id=user_id
         )
@@ -50,23 +57,39 @@ class CreateCompletionCommand:
             system_prompt_content = SystemPromptRepository(
                 self.db
             ).get_current_content_by_id(config.system_prompt_id)
-        agent: Agent[None, str] = Agent(model=model)
 
-        system_message = ModelRequest(
-            parts=[SystemPromptPart(content=system_prompt_content)]
-        )
+        if result_model is not None:
+            agent = Agent(model=model, output_type=result_model)  # type: ignore[arg-type]
+        else:
+            agent: Agent[None, str] = Agent(model=model)
 
         messages, user_prompt = _split_messages(payload.messages)
 
-        run_kwargs: dict = {"message_history": [system_message] + messages}
-        print(run_kwargs)
+        run_kwargs: dict = {"message_history": messages}
+        if system_prompt_content is not None:
+            system_message = ModelRequest(parts=[SystemPromptPart(content=system_prompt_content)])
+            run_kwargs["message_history"] = [system_message] + messages
         if tools:
             executor = MCPToolExecutor(self.db)
             run_kwargs["toolsets"] = [MCPToolset(tools, executor, user_id=user_id)]
         if config.max_tool_rounds is not None:
             run_kwargs["max_result_retries"] = config.max_tool_rounds
 
-        result = await agent.run(user_prompt, **run_kwargs)
+        try:
+            result = await agent.run(user_prompt, **run_kwargs)
+        except UnexpectedModelBehavior as e:
+            if result_model is not None:
+                raise StructuredOutputValidationError(
+                    "Provider response did not conform to the requested schema.",
+                    validation_errors=[{"message": str(e)}],
+                    raw_content=str(e),
+                )
+            raise ProviderError(str(e)) from e
+
+        if result_model is not None:
+            output = result.output.model_dump()
+        else:
+            output = result.output
 
         usage = result.usage()
         return CompletionResponse(
@@ -77,7 +100,7 @@ class CreateCompletionCommand:
             choices=[
                 {
                     "index": 0,
-                    "message": {"role": "assistant", "content": result.output},
+                    "message": {"role": "assistant", "content": output},
                     "finish_reason": "stop",
                 }
             ],
