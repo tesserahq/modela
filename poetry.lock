@@ -1396,6 +1396,7 @@ files = [
     {file = "fastavro-1.12.2-cp314-cp314-musllinux_1_2_x86_64.whl", hash = "sha256:bc44ba6289fb1f5ee318335958dde6ad6d742dcb4bb8930de843e9024c64b68c"},
     {file = "fastavro-1.12.2-cp314-cp314-win_amd64.whl", hash = "sha256:a475418f71c5aed69899813ecccf392429c08c3a63df3030129db71760b0db8f"},
     {file = "fastavro-1.12.2-cp314-cp314-win_arm64.whl", hash = "sha256:daec9f9655a1d4636613c47d6d3343f6e039150d66cdce62543e20ca36612a8a"},
+    {file = "fastavro-1.12.2-cp314-cp314t-macosx_10_15_universal2.whl", hash = "sha256:57594b72cf663bbd0f3ad8a319a999fc3d7c71065a6799b2c1d1a6a137894c5b"},
     {file = "fastavro-1.12.2-cp314-cp314t-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:74412132bbfb153cbf704517f2c89f7d3e170feb681b13bceace690f66f8d5fa"},
     {file = "fastavro-1.12.2-cp314-cp314t-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:e367a84c9133018e0a3bc822abe78d7f1f9a6092991a0ec409468cf4ef260282"},
     {file = "fastavro-1.12.2-cp314-cp314t-musllinux_1_2_aarch64.whl", hash = "sha256:044fafca0853e9ae14009de7763ac9e8e8f8b96f8a4e90bd58b695443266a370"},
@@ -1417,48 +1418,78 @@ zstandard = ["backports.zstd ; python_version < \"3.14\""]
 
 [[package]]
 name = "fastmcp"
-version = "3.2.4"
+version = "3.3.1"
 description = "The fast, Pythonic way to build MCP servers and clients."
 optional = false
 python-versions = ">=3.10"
 groups = ["main"]
 files = [
-    {file = "fastmcp-3.2.4-py3-none-any.whl", hash = "sha256:e6c9c429171041455e47ab94bb3f83c4657622a0ec28922f6940053959bd58a9"},
-    {file = "fastmcp-3.2.4.tar.gz", hash = "sha256:083ecb75b44a4169e7fc0f632f94b781bdb0ff877c6b35b9877cbb566fd4d4d1"},
+    {file = "fastmcp-3.3.1-py3-none-any.whl", hash = "sha256:862440c5c4d281363a5995eee59d77f0f7cac1f18869038729cecf03b02fc522"},
+    {file = "fastmcp-3.3.1.tar.gz", hash = "sha256:979362ea557de42a5f40342563c7e4b236bcc8e7cd192715f50030695d1a71cd"},
 ]
 
 [package.dependencies]
-authlib = ">=1.6.5"
-cyclopts = ">=4.0.0"
-exceptiongroup = ">=1.2.2"
-griffelib = ">=2.0.0"
-httpx = ">=0.28.1,<1.0"
-jsonref = ">=1.1.0"
-jsonschema-path = ">=0.3.4"
-mcp = ">=1.24.0,<2.0"
-openapi-pydantic = ">=0.5.1"
-opentelemetry-api = ">=1.20.0"
-packaging = ">=24.0"
+fastmcp-slim = {version = "3.3.1", extras = ["client", "server"]}
+
+[package.extras]
+anthropic = ["fastmcp-slim[anthropic] (==3.3.1)"]
+apps = ["fastmcp-slim[apps] (==3.3.1)"]
+azure = ["fastmcp-slim[azure] (==3.3.1)"]
+code-mode = ["fastmcp-slim[code-mode] (==3.3.1)"]
+gemini = ["fastmcp-slim[gemini] (==3.3.1)"]
+openai = ["fastmcp-slim[openai] (==3.3.1)"]
+tasks = ["fastmcp-slim[tasks] (==3.3.1)"]
+
+[[package]]
+name = "fastmcp-slim"
+version = "3.3.1"
+description = "The dependency-slim FastMCP package."
+optional = false
+python-versions = ">=3.10"
+groups = ["main"]
+files = [
+    {file = "fastmcp_slim-3.3.1-py3-none-any.whl", hash = "sha256:6cf1c2d77e3adb0d409d6825ed6b0b2a999062973e00b8eea03bd48bf9b4c043"},
+    {file = "fastmcp_slim-3.3.1.tar.gz", hash = "sha256:0957835fc59452e143ab2f4b7836d2d2df9b2d9958408edc79ba8b56232b2a88"},
+]
+
+[package.dependencies]
+authlib = {version = ">=1.6.11", optional = true, markers = "extra == \"client\" or extra == \"server\""}
+cyclopts = {version = ">=4.0.0", optional = true, markers = "extra == \"server\""}
+exceptiongroup = {version = ">=1.2.2", optional = true, markers = "extra == \"client\" or extra == \"server\""}
+griffelib = {version = ">=2.0.0", optional = true, markers = "extra == \"server\""}
+httpx = {version = ">=0.28.1,<1.0", optional = true, markers = "extra == \"client\" or extra == \"server\""}
+jsonref = {version = ">=1.1.0", optional = true, markers = "extra == \"server\""}
+jsonschema-path = {version = ">=0.3.4", optional = true, markers = "extra == \"server\""}
+mcp = {version = ">=1.24.0,<2.0", optional = true, markers = "extra == \"client\" or extra == \"server\""}
+openapi-pydantic = {version = ">=0.5.1", optional = true, markers = "extra == \"server\""}
+opentelemetry-api = {version = ">=1.20.0", optional = true, markers = "extra == \"client\" or extra == \"server\""}
+packaging = {version = ">=24.0", optional = true, markers = "extra == \"server\""}
 platformdirs = ">=4.0.0"
-py-key-value-aio = {version = ">=0.4.4,<0.5.0", extras = ["filetree", "keyring", "memory"]}
+py-key-value-aio = {version = ">=0.4.4,<0.5.0", extras = ["filetree", "keyring", "memory"], optional = true, markers = "extra == \"client\" or extra == \"server\""}
 pydantic = {version = ">=2.11.7", extras = ["email"]}
-pyperclip = ">=1.9.0"
+pydantic-settings = ">=2.0.0"
+pyperclip = {version = ">=1.9.0", optional = true, markers = "extra == \"server\""}
 python-dotenv = ">=1.1.0"
-pyyaml = ">=6.0,<7.0"
+python-multipart = {version = ">=0.0.26", optional = true, markers = "extra == \"server\""}
+pyyaml = {version = ">=6.0,<7.0", optional = true, markers = "extra == \"server\""}
 rich = ">=13.9.4"
-uncalled-for = ">=0.2.0"
-uvicorn = ">=0.35"
-watchfiles = ">=1.0.0"
-websockets = ">=15.0.1"
+typing-extensions = ">=4.0.0"
+uncalled-for = {version = ">=0.2.0", optional = true, markers = "extra == \"server\""}
+uvicorn = {version = ">=0.35", optional = true, markers = "extra == \"server\""}
+watchfiles = {version = ">=1.0.0", optional = true, markers = "extra == \"server\""}
+websockets = {version = ">=15.0.1", optional = true, markers = "extra == \"server\""}
 
 [package.extras]
 anthropic = ["anthropic (>=0.48.0)"]
 apps = ["prefab-ui (>=0.18.0)"]
 azure = ["azure-identity (>=1.16.0)", "pyjwt (>=2.12.0)"]
-code-mode = ["pydantic-monty (==0.0.11)"]
-gemini = ["google-genai (>=1.18.0)"]
+client = ["authlib (>=1.6.11)", "exceptiongroup (>=1.2.2)", "httpx (>=0.28.1,<1.0)", "mcp (>=1.24.0,<2.0)", "opentelemetry-api (>=1.20.0)", "py-key-value-aio[filetree,keyring,memory] (>=0.4.4,<0.5.0)"]
+code-mode = ["pydantic-monty (==0.0.16)"]
+gemini = ["google-genai (>=1.18.0)", "jsonref (>=1.1.0)"]
+mcp = ["exceptiongroup (>=1.2.2)", "httpx (>=0.28.1,<1.0)", "mcp (>=1.24.0,<2.0)", "opentelemetry-api (>=1.20.0)"]
 openai = ["openai (>=1.102.0)"]
-tasks = ["pydocket (>=0.19.0)"]
+server = ["authlib (>=1.6.11)", "cyclopts (>=4.0.0)", "exceptiongroup (>=1.2.2)", "griffelib (>=2.0.0)", "httpx (>=0.28.1,<1.0)", "jsonref (>=1.1.0)", "jsonschema-path (>=0.3.4)", "mcp (>=1.24.0,<2.0)", "openapi-pydantic (>=0.5.1)", "opentelemetry-api (>=1.20.0)", "packaging (>=24.0)", "py-key-value-aio[filetree,keyring,memory] (>=0.4.4,<0.5.0)", "pyperclip (>=1.9.0)", "python-multipart (>=0.0.26)", "pyyaml (>=6.0,<7.0)", "uncalled-for (>=0.2.0)", "uvicorn (>=0.35)", "watchfiles (>=1.0.0)", "websockets (>=15.0.1)"]
+tasks = ["pydocket (>=0.20.0)"]
 
 [[package]]
 name = "faststream"
@@ -3931,51 +3962,52 @@ timezone = ["tzdata ; python_version >= \"3.9\" and platform_system == \"Windows
 
 [[package]]
 name = "pydantic-ai"
-version = "1.89.1"
+version = "1.97.0"
 description = "Agent Framework / shim to use Pydantic with LLMs"
 optional = false
 python-versions = ">=3.10"
 groups = ["main"]
 files = [
-    {file = "pydantic_ai-1.89.1-py3-none-any.whl", hash = "sha256:995e5edc068c232729ec4c5246e9e9ede1d34eea5ee8acbaa7ca9560f731f43a"},
-    {file = "pydantic_ai-1.89.1.tar.gz", hash = "sha256:abed9da5c265565f7e1163ebb6626451c6cce3a832624706c6bbe2900d1a2c75"},
+    {file = "pydantic_ai-1.97.0-py3-none-any.whl", hash = "sha256:d05dabdbc4dd48a77e262a51ebdb36ef3ffe6de22a6ed99944b6dc1f922576bf"},
+    {file = "pydantic_ai-1.97.0.tar.gz", hash = "sha256:be891d6111fbb45ef913d4260439828d1628d53d45c0a9ff18e49b976f9b38e5"},
 ]
 
 [package.dependencies]
-pydantic-ai-slim = {version = "1.89.1", extras = ["ag-ui", "anthropic", "bedrock", "cli", "cohere", "evals", "fastmcp", "google", "groq", "huggingface", "logfire", "mcp", "mistral", "openai", "retries", "spec", "temporal", "ui", "vertexai", "xai"]}
+pydantic-ai-slim = {version = "1.97.0", extras = ["ag-ui", "anthropic", "bedrock", "cli", "cohere", "evals", "fastmcp", "google", "groq", "huggingface", "logfire", "mcp", "mistral", "openai", "retries", "spec", "temporal", "ui", "vertexai", "xai"]}
 
 [package.extras]
 a2a = ["fasta2a (>=0.4.1)"]
-dbos = ["pydantic-ai-slim[dbos] (==1.89.1)"]
-examples = ["pydantic-ai-examples (==1.89.1)"]
-outlines-llamacpp = ["pydantic-ai-slim[outlines-llamacpp] (==1.89.1)"]
-outlines-mlxlm = ["pydantic-ai-slim[outlines-mlxlm] (==1.89.1) ; platform_system == \"Darwin\" and platform_machine == \"arm64\""]
-outlines-sglang = ["pydantic-ai-slim[outlines-sglang] (==1.89.1)"]
-outlines-transformers = ["pydantic-ai-slim[outlines-transformers] (==1.89.1)"]
-outlines-vllm-offline = ["pydantic-ai-slim[outlines-vllm-offline] (==1.89.1)"]
-prefect = ["pydantic-ai-slim[prefect] (==1.89.1)"]
-sentence-transformers = ["pydantic-ai-slim[sentence-transformers] (==1.89.1)"]
-voyageai = ["pydantic-ai-slim[voyageai] (==1.89.1)"]
+dbos = ["pydantic-ai-slim[dbos] (==1.97.0)"]
+examples = ["pydantic-ai-examples (==1.97.0)"]
+outlines-llamacpp = ["pydantic-ai-slim[outlines-llamacpp] (==1.97.0)"]
+outlines-mlxlm = ["pydantic-ai-slim[outlines-mlxlm] (==1.97.0) ; platform_system == \"Darwin\" and platform_machine == \"arm64\""]
+outlines-sglang = ["pydantic-ai-slim[outlines-sglang] (==1.97.0)"]
+outlines-transformers = ["pydantic-ai-slim[outlines-transformers] (==1.97.0)"]
+outlines-vllm-offline = ["pydantic-ai-slim[outlines-vllm-offline] (==1.97.0)"]
+prefect = ["pydantic-ai-slim[prefect] (==1.97.0)"]
+sentence-transformers = ["pydantic-ai-slim[sentence-transformers] (==1.97.0)"]
+voyageai = ["pydantic-ai-slim[voyageai] (==1.97.0)"]
 
 [[package]]
 name = "pydantic-ai-slim"
-version = "1.89.1"
+version = "1.97.0"
 description = "Agent Framework / shim to use Pydantic with LLMs, slim package"
 optional = false
 python-versions = ">=3.10"
 groups = ["main"]
 files = [
-    {file = "pydantic_ai_slim-1.89.1-py3-none-any.whl", hash = "sha256:9e7d615a0a3e48993d067901e596e85708e9c8d1f6bef96c20c340385028d465"},
-    {file = "pydantic_ai_slim-1.89.1.tar.gz", hash = "sha256:3ed967bff8dec992a907c1d1dabab2034a5f4aee75289de22e88b2ef9def8da6"},
+    {file = "pydantic_ai_slim-1.97.0-py3-none-any.whl", hash = "sha256:f4e086f6b2141f841aacfdc3a5825a3632bac463e2d49261aaad5789700e93ef"},
+    {file = "pydantic_ai_slim-1.97.0.tar.gz", hash = "sha256:f7da3bc68cefa43819e744223bb024f7ff7921d99aefce791e00e33eae84597b"},
 ]
 
 [package.dependencies]
 ag-ui-protocol = {version = ">=0.1.10", optional = true, markers = "extra == \"ag-ui\""}
-anthropic = {version = ">=0.96.0", optional = true, markers = "extra == \"anthropic\""}
+anthropic = {version = ">=0.97.0", optional = true, markers = "extra == \"anthropic\""}
 argcomplete = {version = ">=3.5.0", optional = true, markers = "extra == \"cli\""}
 boto3 = {version = ">=1.42.63", optional = true, markers = "extra == \"bedrock\""}
 cohere = {version = ">=5.20.6", optional = true, markers = "platform_system != \"Emscripten\" and extra == \"cohere\""}
-fastmcp = {version = ">=3.2.4", optional = true, markers = "extra == \"fastmcp\""}
+fastmcp = {version = ">=3.3.0", optional = true, markers = "extra == \"fastmcp\""}
+fastmcp-slim = {version = ">=3.3.0", extras = ["client"], optional = true, markers = "extra == \"mcp\""}
 genai-prices = ">=0.0.48"
 google-auth = {version = ">=2.36.0", optional = true, markers = "extra == \"vertexai\""}
 google-genai = {version = ">=1.70.0", optional = true, markers = "extra == \"google\""}
@@ -3984,14 +4016,13 @@ groq = {version = ">=0.25.0", optional = true, markers = "extra == \"groq\""}
 httpx = ">=0.27"
 huggingface-hub = {version = ">=1.3.4,<2.0.0", optional = true, markers = "extra == \"huggingface\""}
 logfire = {version = ">=4.16.0", extras = ["httpx"], optional = true, markers = "extra == \"logfire\""}
-mcp = {version = ">=1.25.0,<2.0", optional = true, markers = "extra == \"mcp\""}
-mistralai = {version = ">=2.0.0", optional = true, markers = "extra == \"mistral\""}
+mistralai = {version = ">=2.0.0,<2.4.6 || >2.4.6", optional = true, markers = "extra == \"mistral\""}
 openai = {version = ">=2.29.0", optional = true, markers = "extra == \"openai\""}
 opentelemetry-api = ">=1.28.0"
 prompt-toolkit = {version = ">=3", optional = true, markers = "extra == \"cli\""}
 pydantic = ">=2.12"
-pydantic-evals = {version = "1.89.1", optional = true, markers = "extra == \"evals\""}
-pydantic-graph = "1.89.1"
+pydantic-evals = {version = "1.97.0", optional = true, markers = "extra == \"evals\""}
+pydantic-graph = "1.97.0"
 pydantic-handlebars = {version = ">=0.1.0", optional = true, markers = "extra == \"spec\""}
 pyperclip = {version = ">=1.9.0", optional = true, markers = "extra == \"cli\""}
 pyyaml = {version = ">=6.0.2", optional = true, markers = "extra == \"cli\" or extra == \"spec\""}
@@ -4005,23 +4036,23 @@ typing-inspection = ">=0.4.0"
 xai-sdk = {version = ">=1.5.0", optional = true, markers = "extra == \"xai\""}
 
 [package.extras]
-a2a = ["fasta2a (>=0.4.1)"]
+a2a = ["fasta2a (>=0.6.1)"]
 ag-ui = ["ag-ui-protocol (>=0.1.10)", "starlette (>=0.45.3)"]
-anthropic = ["anthropic (>=0.96.0)"]
+anthropic = ["anthropic (>=0.97.0)"]
 bedrock = ["boto3 (>=1.42.63)"]
 cli = ["argcomplete (>=3.5.0)", "prompt-toolkit (>=3)", "pyperclip (>=1.9.0)", "pyyaml (>=6.0.2)", "rich (>=13)"]
 cohere = ["cohere (>=5.20.6) ; platform_system != \"Emscripten\""]
 dbos = ["dbos (>=2.10.0)"]
 duckduckgo = ["ddgs (>=9.0.0)"]
-evals = ["pydantic-evals (==1.89.1)"]
+evals = ["pydantic-evals (==1.97.0)"]
 exa = ["exa-py (>=2.0.0)"]
-fastmcp = ["fastmcp (>=3.2.4)"]
+fastmcp = ["fastmcp (>=3.3.0)"]
 google = ["google-genai (>=1.70.0)"]
 groq = ["groq (>=0.25.0)"]
 huggingface = ["huggingface-hub (>=1.3.4,<2.0.0)"]
 logfire = ["logfire[httpx] (>=4.16.0)"]
-mcp = ["mcp (>=1.25.0,<2.0)"]
-mistral = ["mistralai (>=2.0.0)"]
+mcp = ["fastmcp-slim[client] (>=3.3.0)"]
+mistral = ["mistralai (>=2.0.0,!=2.4.6)"]
 openai = ["openai (>=2.29.0)", "tiktoken (>=0.12.0)"]
 openrouter = ["openai (>=2.8.0)"]
 outlines-llamacpp = ["outlines[llamacpp] (>=1.0.0,<1.3.0) ; python_version < \"3.14\""]
@@ -4177,21 +4208,21 @@ typing-extensions = ">=4.14.1"
 
 [[package]]
 name = "pydantic-evals"
-version = "1.89.1"
+version = "1.97.0"
 description = "Framework for evaluating stochastic code execution, especially code making use of LLMs"
 optional = false
 python-versions = ">=3.10"
 groups = ["main"]
 files = [
-    {file = "pydantic_evals-1.89.1-py3-none-any.whl", hash = "sha256:91e614adeba56af51415735c49a2b590813eb9d0151480eec892f71bcc1b59c7"},
-    {file = "pydantic_evals-1.89.1.tar.gz", hash = "sha256:3854d792029add7f80926f08219a2a8f02c37e6e4d00a0a07e324490cd09218c"},
+    {file = "pydantic_evals-1.97.0-py3-none-any.whl", hash = "sha256:1781927b2e5610a15b37574c0222704a979ca6ae7d7db235dd70684b7d4a84f0"},
+    {file = "pydantic_evals-1.97.0.tar.gz", hash = "sha256:6ecf3d32a4f18ac009bd8e0685497c45dcb15a226b9047e094cd2f18ca9db535"},
 ]
 
 [package.dependencies]
 anyio = ">=0"
 logfire-api = ">=3.14.1"
 pydantic = ">=2.12"
-pydantic-ai-slim = "1.89.1"
+pydantic-ai-slim = "1.97.0"
 pyyaml = ">=6.0.2"
 rich = ">=13.9.4"
 
@@ -4200,14 +4231,14 @@ logfire = ["logfire (>=3.14.1)"]
 
 [[package]]
 name = "pydantic-graph"
-version = "1.89.1"
+version = "1.97.0"
 description = "Graph and state machine library"
 optional = false
 python-versions = ">=3.10"
 groups = ["main"]
 files = [
-    {file = "pydantic_graph-1.89.1-py3-none-any.whl", hash = "sha256:2ebce28573e81de9924c2ff68f90f949ccd96bbc2e8dc6cf4bb96208b34fbec0"},
-    {file = "pydantic_graph-1.89.1.tar.gz", hash = "sha256:99b8ae10fd10400208ee469355969e2dc253a600c3f667a5e790874064846e85"},
+    {file = "pydantic_graph-1.97.0-py3-none-any.whl", hash = "sha256:db0c95e1686e0fd9843b558ff608fa90ed2cdc56d8b8a7249180216ad56ad764"},
+    {file = "pydantic_graph-1.97.0.tar.gz", hash = "sha256:26dade3f9a3a090325f9bc52c72c6fe48470c8d18c746ffd577b7202a72c656b"},
 ]
 
 [package.dependencies]
