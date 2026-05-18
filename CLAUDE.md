@@ -45,11 +45,13 @@ app/
     completions/        # create_completion_command.py
   routers/
     utils/dependencies.py  # Shared FastAPI dependencies — get_<resource>_or_404 pattern for ID-based endpoints
-  providers/            # Provider adapters: BaseProviderAdapter ABC, registry
+  inference/            # Full model lifecycle: factory (build_model), ModelaModel wrapper, provider adapters
+    model.py            # ModelaModel — pydantic-ai Model decorator; applies ModelConfig params and logs usage
+    factory.py          # build_model(config, project_id, request_id) — single entry point for commands
+    adapters/           # Provider adapters: BaseProviderAdapter ABC, registry, OpenAI implementation
   tasks/                # Celery tasks (fire-and-forget via .delay())
   auth/rbac.py          # build_rbac_dependencies() — wraps tessera-sdk authorize()
   exceptions/           # ResourceNotFoundError (404), ProviderError (502), ProviderTimeoutError (504)
-  gateway/              # ModelaModel — pydantic-ai Model wrapper; intercepts each round-trip to apply ModelConfig params and log token usage
   services/
     credential_applier.py  # Resolves credential_id → auth headers (5 types: Bearer, Basic, API key, M2M, delegated exchange)
     mcp/               # MCPToolset (pydantic-ai AbstractToolset adapter), MCPToolExecutor, ToolCatalog (Redis-cached), client_factory
@@ -81,7 +83,7 @@ app/
 
 **New models need to be exported from `app/models/__init__.py`** so `alembic/env.py`'s `import app.models` picks them up.
 
-**Adding a new provider:** implement `BaseProviderAdapter` in `app/providers/`, register it in `app/providers/registry.py`.
+**Adding a new provider:** implement `BaseProviderAdapter` in `app/inference/adapters/`, register it in `app/inference/adapters/registry.py`.
 
 **`routers/utils/dependencies.py` is the canonical place for shared dependencies.** Use `ResourceNotFoundError` (not `HTTPException`) so the registered exception handler serializes the 404 response consistently. Note: `get_mcp_server_by_id` in that file still uses `HTTPException` directly — don't follow that example for new code.
 

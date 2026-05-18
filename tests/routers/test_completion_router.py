@@ -50,7 +50,7 @@ def _mock_agent_run():
 
 @pytest.fixture(autouse=True)
 def mock_celery_task():
-    with patch("app.gateway.modela_model.log_completion_usage") as m:
+    with patch("app.inference.model.log_completion_usage") as m:
         m.delay = MagicMock()
         yield m
 
@@ -61,7 +61,7 @@ def mock_openai_api_key():
     mock_settings = MagicMock()
     mock_settings.openai_api_key = "sk-test-fake-key"
     with patch(
-        "app.providers.openai_adapter.get_settings",
+        "app.inference.adapters.openai.get_settings",
         return_value=mock_settings,
     ):
         yield

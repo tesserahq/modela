@@ -14,8 +14,7 @@ from app.exceptions.resource_not_found_error import ResourceNotFoundError
 from app.exceptions.structured_output_validation_error import (
     StructuredOutputValidationError,
 )
-from app.gateway.modela_model import ModelaModel
-from app.providers.registry import get_adapter
+from app.inference import build_model
 from app.repositories.mcp_tool_catalog_repository import MCPToolCatalogRepository
 from app.repositories.model_config_repository import ModelConfigRepository
 from app.repositories.system_prompt_repository import SystemPromptRepository
@@ -56,9 +55,7 @@ class CreateCompletionCommand:
             config.id, user_id=user_id
         )
 
-        adapter = get_adapter(config.provider)
-        inner = adapter.create_model(config.model)
-        model = ModelaModel(inner, config, project_id, request_id)
+        model = build_model(config, project_id, request_id)
 
         system_prompt_content = None
         if config.system_prompt_id is not None:

@@ -1,5 +1,5 @@
-from app.providers.base import BaseProviderAdapter
-from app.providers.openai_adapter import OpenAIProviderAdapter
+from app.inference.adapters.base import BaseProviderAdapter
+from app.inference.adapters.openai import OpenAIProviderAdapter
 
 PROVIDER_REGISTRY: dict[str, BaseProviderAdapter] = {
     "openai": OpenAIProviderAdapter(),
