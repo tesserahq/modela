@@ -192,3 +192,97 @@ def test_delete_record_soft_deletes(db: Session, sample_config):
     )
     assert still_in_db is not None
     assert still_in_db.deleted_at is not None
+
+
+# --- config_type tests ---
+
+
+def test_get_default_for_type_returns_matching(db: Session):
+    repo = ModelConfigRepository(db)
+    repo.create(
+        {
+            "slug": "summary-default",
+            "name": "Summary Default",
+            "provider": "openai",
+            "model": "gpt-4o",
+            "config_type": "summary",
+            "is_default": True,
+        }
+    )
+
+    found = repo.get_default_for_type("summary")
+
+    assert found is not None
+    assert found.slug == "summary-default"
+    assert found.config_type == "summary"
+
+
+def test_get_default_for_type_returns_none_when_none_set(db: Session):
+    assert ModelConfigRepository(db).get_default_for_type("summary") is None
+
+
+def test_get_default_for_type_ignores_other_types(db: Session):
+    repo = ModelConfigRepository(db)
+    repo.create(
+        {
+            "slug": "chat-default",
+            "name": "Chat Default",
+            "provider": "openai",
+            "model": "gpt-4o",
+            "config_type": "chat",
+            "is_default": True,
+        }
+    )
+
+    assert repo.get_default_for_type("summary") is None
+
+
+def test_clear_default_scoped_to_type(db: Session):
+    repo = ModelConfigRepository(db)
+    chat_config = repo.create(
+        {
+            "slug": "chat-default",
+            "name": "Chat Default",
+            "provider": "openai",
+            "model": "gpt-4o",
+            "config_type": "chat",
+            "is_default": True,
+        }
+    )
+    repo.create(
+        {
+            "slug": "summary-default",
+            "name": "Summary Default",
+            "provider": "openai",
+            "model": "gpt-4o",
+            "config_type": "summary",
+            "is_default": True,
+        }
+    )
+
+    # Setting a new summary default should NOT clear the chat default
+    repo.create(
+        {
+            "slug": "summary-default-2",
+            "name": "Summary Default 2",
+            "provider": "openai",
+            "model": "gpt-4o",
+            "config_type": "summary",
+            "is_default": True,
+        }
+    )
+
+    db.refresh(chat_config)
+    assert chat_config.is_default is True
+
+    summary_defaults = (
+        db.query(ModelConfig)
+        .filter(
+            ModelConfig.config_type == "summary",
+            ModelConfig.is_default.is_(True),
+            ModelConfig.deleted_at.is_(None),
+        )
+        .all()
+    )
+    assert len(summary_defaults) == 1
+    assert summary_defaults[0].slug == "summary-default-2"

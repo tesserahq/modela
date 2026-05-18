@@ -43,12 +43,13 @@ app/
   commands/             # Mutating operations only — CREATE/UPDATE/DELETE. For reads, routers call repositories directly (no command needed).
     model_configs/      # create_, update_, delete_model_config_command.py
     completions/        # create_completion_command.py
+    summarize/          # create_summarize_command.py
   routers/
     utils/dependencies.py  # Shared FastAPI dependencies — get_<resource>_or_404 pattern for ID-based endpoints
   inference/            # Full model lifecycle: factory (build_model), ModelaModel wrapper, provider adapters
     model.py            # ModelaModel — pydantic-ai Model decorator; applies ModelConfig params and logs usage
     factory.py          # build_model(config, project_id, request_id) — single entry point for commands
-    adapters/           # Provider adapters: BaseProviderAdapter ABC, registry, OpenAI implementation
+    adapters/           # Provider adapters: BaseProviderAdapter ABC, registry, OpenAI + Anthropic implementations
   tasks/                # Celery tasks (fire-and-forget via .delay())
   auth/rbac.py          # build_rbac_dependencies() — wraps tessera-sdk authorize()
   exceptions/           # ResourceNotFoundError (404), ProviderError (502), ProviderTimeoutError (504)
@@ -66,7 +67,8 @@ app/
 | `TEST_DATABASE_URL` | `postgresql://...localhost.../modela_test` | resolved automatically when `ENV=test`; override only if DB is non-default |
 | `ENV` | `development` | set to `test` for tests, `production` for prod |
 | `DISABLE_AUTH` | `false` | set `true` locally to skip JWT middleware |
-| `OPENAI_API_KEY` | — | required for completion requests |
+| `OPENAI_API_KEY` | — | required for OpenAI-backed requests |
+| `ANTHROPIC_API_KEY` | — | required for Anthropic-backed requests |
 | `REDIS_HOST` / `REDIS_PORT` | `localhost` / `6379` | Celery broker + backend |
 | `CREDENTIAL_MASTER_KEY` | — | required for credential storage (AES encryption key) |
 | `FERNET_KEY` | — | optional; legacy field, superseded by `CREDENTIAL_MASTER_KEY` |

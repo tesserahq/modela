@@ -31,6 +31,17 @@ class ModelConfigRepository(SoftDeleteRepository[ModelConfig]):
             .first()
         )
 
+    def get_default_for_type(self, config_type: str) -> Optional[ModelConfig]:
+        return (
+            self.db.query(ModelConfig)
+            .filter(
+                ModelConfig.config_type == config_type,
+                ModelConfig.is_default.is_(True),
+                ModelConfig.deleted_at.is_(None),
+            )
+            .first()
+        )
+
     def list_all(self) -> List[ModelConfig]:
         return (
             self.db.query(ModelConfig)
@@ -48,7 +59,7 @@ class ModelConfigRepository(SoftDeleteRepository[ModelConfig]):
 
     def create(self, data: dict) -> ModelConfig:
         if data.get("is_default"):
-            self._clear_default()
+            self._clear_default(config_type=data.get("config_type", "chat"))
         record = ModelConfig(**data)
         self.db.add(record)
         self.db.commit()
@@ -57,15 +68,19 @@ class ModelConfigRepository(SoftDeleteRepository[ModelConfig]):
 
     def update(self, record: ModelConfig, data: dict) -> ModelConfig:
         if data.get("is_default"):
-            self._clear_default(exclude_id=record.id)
+            config_type = data.get("config_type", record.config_type)
+            self._clear_default(config_type=config_type, exclude_id=record.id)
         for key, value in data.items():
             setattr(record, key, value)
         self.db.commit()
         self.db.refresh(record)
         return record
 
-    def _clear_default(self, exclude_id: Optional[UUID] = None) -> None:
+    def _clear_default(
+        self, config_type: str, exclude_id: Optional[UUID] = None
+    ) -> None:
         q = self.db.query(ModelConfig).filter(
+            ModelConfig.config_type == config_type,
             ModelConfig.is_default.is_(True),
             ModelConfig.deleted_at.is_(None),
         )
