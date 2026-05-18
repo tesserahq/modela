@@ -1,7 +1,7 @@
 from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openai import OpenAIProvider
 from app.config import get_settings
-from app.providers.base import BaseProviderAdapter
+from app.inference.adapters.base import BaseProviderAdapter
 
 
 class OpenAIProviderAdapter(BaseProviderAdapter):
