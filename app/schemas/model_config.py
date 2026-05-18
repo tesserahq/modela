@@ -1,7 +1,9 @@
-from pydantic import BaseModel, Field, field_validator
-from typing import Optional, Any
+from pydantic import BaseModel, Field
+from typing import Literal, Optional, Any
 from uuid import UUID
 from datetime import datetime
+
+ConfigType = Literal["chat", "summary", "generation"]
 
 
 class MCPServerAttachRequest(BaseModel):
@@ -18,6 +20,7 @@ class ModelConfigBase(BaseModel):
     max_tokens: Optional[int] = Field(None, gt=0)
     top_p: Optional[float] = Field(None, ge=0.0, le=1.0)
     output_schema: Optional[dict[str, Any]] = None
+    config_type: ConfigType = "chat"
     is_default: bool = False
     max_tool_rounds: Optional[int] = Field(None, ge=1, le=50)
 
@@ -33,6 +36,7 @@ class ModelConfigUpdate(BaseModel):
     max_tokens: Optional[int] = Field(None, gt=0)
     top_p: Optional[float] = Field(None, ge=0.0, le=1.0)
     output_schema: Optional[dict[str, Any]] = None
+    config_type: Optional[ConfigType] = None
     is_default: Optional[bool] = None
     max_tool_rounds: Optional[int] = Field(None, ge=1, le=50)
 

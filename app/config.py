@@ -79,6 +79,9 @@ class Settings(BaseSettings):
     openai_api_key: Optional[str] = Field(
         default=None, json_schema_extra={"env": "OPENAI_API_KEY"}
     )
+    anthropic_api_key: Optional[str] = Field(
+        default=None, json_schema_extra={"env": "ANTHROPIC_API_KEY"}
+    )
     credential_master_key: Optional[str] = Field(
         default=None,
         json_schema_extra={"env": "CREDENTIAL_MASTER_KEY"},

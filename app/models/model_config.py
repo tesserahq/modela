@@ -60,6 +60,7 @@ class ModelConfig(Base, TimestampMixin, SoftDeleteMixin):
     max_tokens = Column(Integer, nullable=True)
     top_p = Column(Float, nullable=True)
     output_schema = Column(JSONB, nullable=True)
+    config_type = Column(String(50), nullable=False, default="chat")
     is_default = Column(Boolean, nullable=False, default=False, index=True)
     max_tool_rounds = Column(Integer, nullable=True)
 

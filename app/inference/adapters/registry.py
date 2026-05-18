@@ -1,7 +1,9 @@
+from app.inference.adapters.anthropic import AnthropicProviderAdapter
 from app.inference.adapters.base import BaseProviderAdapter
 from app.inference.adapters.openai import OpenAIProviderAdapter
 
 PROVIDER_REGISTRY: dict[str, BaseProviderAdapter] = {
+    "anthropic": AnthropicProviderAdapter(),
     "openai": OpenAIProviderAdapter(),
 }
 
