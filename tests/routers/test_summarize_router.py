@@ -85,7 +85,7 @@ def mock_openai_api_key():
 @pytest.fixture(autouse=True)
 def mock_agent_run():
     with patch(
-        "app.commands.summarize.create_summarize_command.Agent.run",
+        "app.inference.agent_runner.Agent.run",
         new_callable=AsyncMock,
         return_value=_mock_agent_run(),
     ):

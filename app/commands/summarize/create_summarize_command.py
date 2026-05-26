@@ -1,14 +1,11 @@
 import logging
 from uuid import UUID
 
-from pydantic_ai import Agent
-from pydantic_ai.exceptions import UnexpectedModelBehavior
 from pydantic_ai.messages import DocumentUrl
 from sqlalchemy.orm import Session
 
-from app.exceptions.provider_errors import ProviderError
 from app.exceptions.resource_not_found_error import ResourceNotFoundError
-from app.inference import build_model
+from app.inference import AgentRunner, build_model
 from app.repositories.model_config_repository import ModelConfigRepository
 from app.repositories.system_prompt_repository import SystemPromptRepository
 from app.schemas.summarize import SummarizeResponse
@@ -50,8 +47,6 @@ class CreateSummarizeCommand:
         *,
         user_id: UUID,
     ) -> SummarizeResponse:
-        # Include a text instruction alongside the document so all providers
-        # receive an explicit directive in the user turn, not just the system prompt.
         return await self._execute(
             user_prompt=[
                 "Please summarize the following document.",
@@ -83,23 +78,18 @@ class CreateSummarizeCommand:
             if resolved is not None:
                 system_prompt_content = resolved
 
-        agent: Agent[None, str] = Agent(
-            model=model, system_prompt=system_prompt_content
+        result = await AgentRunner(model).run(
+            user_prompt,
+            system_prompt=system_prompt_content,
         )
 
-        try:
-            result = await agent.run(user_prompt)
-        except UnexpectedModelBehavior as e:
-            raise ProviderError(str(e)) from e
-
-        usage = result.usage()
         logger.info(
             "summarize complete",
             extra={
                 "request_id": request_id,
                 "config_slug": config.slug,
-                "input_tokens": usage.input_tokens,
-                "output_tokens": usage.output_tokens,
+                "input_tokens": result.input_tokens,
+                "output_tokens": result.output_tokens,
             },
         )
 

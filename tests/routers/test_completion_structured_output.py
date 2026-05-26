@@ -80,7 +80,7 @@ def test_structured_output_returns_dict_in_content(
     mock_result.usage.return_value = _make_usage()
 
     with patch(
-        "app.commands.completions.create_completion_command.Agent.run",
+        "app.inference.agent_runner.Agent.run",
         new_callable=AsyncMock,
         return_value=mock_result,
     ):
@@ -105,7 +105,7 @@ def test_plain_config_still_returns_string_content(
     mock_result.usage.return_value = _make_usage()
 
     with patch(
-        "app.commands.completions.create_completion_command.Agent.run",
+        "app.inference.agent_runner.Agent.run",
         new_callable=AsyncMock,
         return_value=mock_result,
     ):
@@ -127,7 +127,7 @@ def test_provider_validation_failure_returns_502(
     client: TestClient, config_with_output_schema
 ):
     with patch(
-        "app.commands.completions.create_completion_command.Agent.run",
+        "app.inference.agent_runner.Agent.run",
         new_callable=AsyncMock,
         side_effect=UnexpectedModelBehavior("Validation failed", body="bad json"),
     ):
@@ -161,7 +161,7 @@ def test_invalid_output_schema_on_model_config_returns_422(
     )
 
     with patch(
-        "app.commands.completions.create_completion_command.Agent.run",
+        "app.inference.agent_runner.Agent.run",
         new_callable=AsyncMock,
     ):
         response = client.post(
@@ -191,7 +191,7 @@ def test_unsupported_schema_keyword_returns_422(client: TestClient, db: Session)
     )
 
     with patch(
-        "app.commands.completions.create_completion_command.Agent.run",
+        "app.inference.agent_runner.Agent.run",
         new_callable=AsyncMock,
     ):
         response = client.post(
