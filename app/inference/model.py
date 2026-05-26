@@ -62,7 +62,6 @@ class ModelaModel(Model):
             output_tokens=response.usage.output_tokens or 0,
             finish_reason=None,
             latency_ms=latency_ms,
-            cost_estimate_usd=0.0,
         )
 
         return response
