@@ -1,4 +1,6 @@
 import time
+from typing import Optional
+from uuid import UUID
 from pydantic_ai.models import Model, ModelRequestParameters
 from pydantic_ai.messages import ModelMessage, ModelResponse
 from pydantic_ai.settings import ModelSettings
@@ -17,12 +19,15 @@ class ModelaModel(Model):
         model_config: ModelConfig,
         project_id: str,
         request_id: str,
+        *,
+        user_id: Optional[UUID] = None,
     ) -> None:
         super().__init__()
         self._inner = inner
         self._model_config = model_config
         self._project_id = project_id
         self._request_id = request_id
+        self._user_id = user_id
 
     @property
     def model_name(self) -> str:
@@ -62,6 +67,7 @@ class ModelaModel(Model):
             output_tokens=response.usage.output_tokens or 0,
             finish_reason=None,
             latency_ms=latency_ms,
+            created_by_id=str(self._user_id) if self._user_id else None,
         )
 
         return response

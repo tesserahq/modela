@@ -20,6 +20,7 @@ def _run_task(db: Session, **overrides):
         output_tokens=500,
         finish_reason="stop",
         latency_ms=120,
+        created_by_id=None,
     )
     defaults.update(overrides)
 
@@ -56,3 +57,17 @@ def test_token_counts_stored_correctly(db: Session):
     record = _get_by_request_id(db, request_id)
     assert record.input_tokens == 42
     assert record.output_tokens == 7
+
+
+def test_created_by_id_stored_when_provided(db: Session, setup_user):
+    request_id = _run_task(db, created_by_id=str(setup_user.id))
+
+    record = _get_by_request_id(db, request_id)
+    assert record.created_by_id == setup_user.id
+
+
+def test_created_by_id_null_when_omitted(db: Session):
+    request_id = _run_task(db)
+
+    record = _get_by_request_id(db, request_id)
+    assert record.created_by_id is None

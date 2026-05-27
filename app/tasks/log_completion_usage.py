@@ -1,4 +1,5 @@
 from typing import Optional
+from uuid import UUID
 from app.infra.celery_app import celery_app
 from app.infra.logging_config import get_logger
 from app.db import SessionLocal
@@ -19,29 +20,32 @@ def log_completion_usage(
     output_tokens: Optional[int],
     finish_reason: Optional[str],
     latency_ms: Optional[int] = None,
+    created_by_id: Optional[str] = None,
 ) -> None:
     db = SessionLocal()
     try:
         from app.repositories.completion_request_repository import (
             CompletionRequestRepository,
         )
+        from app.schemas.completion_request import CompletionRequestCreate
 
         cost = estimate_cost(provider, model, input_tokens or 0, output_tokens or 0)
 
         repo = CompletionRequestRepository(db)
         repo.create(
-            {
-                "request_id": request_id,
-                "project_id": project_id,
-                "model_config_slug": model_config_slug,
-                "provider": provider,
-                "model": model,
-                "input_tokens": input_tokens,
-                "output_tokens": output_tokens,
-                "finish_reason": finish_reason,
-                "latency_ms": latency_ms,
-                "cost_estimate_usd": cost,
-            }
+            CompletionRequestCreate(
+                request_id=request_id,
+                project_id=project_id,
+                model_config_slug=model_config_slug,
+                provider=provider,
+                model=model,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                finish_reason=finish_reason,
+                latency_ms=latency_ms,
+                cost_estimate_usd=cost,
+                created_by_id=UUID(created_by_id) if created_by_id else None,
+            )
         )
     except Exception as exc:
         logger.error(f"Failed to log completion usage: {exc}", exc_info=True)
