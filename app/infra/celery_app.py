@@ -26,6 +26,31 @@ celery_app.conf.update(
 
 celery_app.autodiscover_tasks(["app.tasks"])  # ensure tasks are registered explicitly
 
+
+_update_prices = None
+
+from celery.signals import worker_init, worker_shutdown  # noqa: E402
+
+
+@worker_init.connect
+def _on_worker_init(sender, **kwargs):
+    global _update_prices
+    if _update_prices is not None:
+        return
+    from genai_prices import UpdatePrices
+
+    _update_prices = UpdatePrices()
+    _update_prices.start()
+
+
+@worker_shutdown.connect
+def _on_worker_shutdown(sender, **kwargs):
+    global _update_prices
+    if _update_prices is not None:
+        _update_prices.stop()
+        _update_prices = None
+
+
 # # Explicitly register tasks to ensure they're available
 # def register_tasks():
 #     """Explicitly import tasks to ensure registration."""

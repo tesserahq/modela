@@ -2,6 +2,7 @@ from typing import Optional
 from app.infra.celery_app import celery_app
 from app.infra.logging_config import get_logger
 from app.db import SessionLocal
+from app.services.pricing import estimate_cost
 
 logger = get_logger("log_completion_usage")
 
@@ -18,13 +19,14 @@ def log_completion_usage(
     output_tokens: Optional[int],
     finish_reason: Optional[str],
     latency_ms: Optional[int] = None,
-    cost_estimate_usd: float = 0.0,
 ) -> None:
     db = SessionLocal()
     try:
         from app.repositories.completion_request_repository import (
             CompletionRequestRepository,
         )
+
+        cost = estimate_cost(provider, model, input_tokens or 0, output_tokens or 0)
 
         repo = CompletionRequestRepository(db)
         repo.create(
@@ -38,7 +40,7 @@ def log_completion_usage(
                 "output_tokens": output_tokens,
                 "finish_reason": finish_reason,
                 "latency_ms": latency_ms,
-                "cost_estimate_usd": cost_estimate_usd,
+                "cost_estimate_usd": cost,
             }
         )
     except Exception as exc:
