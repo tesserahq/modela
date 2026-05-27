@@ -48,7 +48,7 @@ class CreateCompletionCommand:
             config.id, user_id=user_id
         )
 
-        model = build_model(config, project_id, request_id)
+        model = build_model(config, project_id, request_id, user_id=user_id)
 
         system_prompt_content = None
         if config.system_prompt_id is not None:

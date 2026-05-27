@@ -3,23 +3,24 @@ from uuid import uuid4
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 from app.repositories.completion_request_repository import CompletionRequestRepository
+from app.schemas.completion_request import CompletionRequestCreate
 
 
 def _record_payload(**overrides):
-    base = {
-        "request_id": str(uuid4()),
-        "project_id": "*",
-        "model_config_slug": "default-chat",
-        "provider": "openai",
-        "model": "gpt-4o",
-        "input_tokens": 10,
-        "output_tokens": 5,
-        "latency_ms": 123,
-        "cost_estimate_usd": 0,
-        "finish_reason": "stop",
-    }
+    base = dict(
+        request_id=str(uuid4()),
+        project_id="*",
+        model_config_slug="default-chat",
+        provider="openai",
+        model="gpt-4o",
+        input_tokens=10,
+        output_tokens=5,
+        latency_ms=123,
+        cost_estimate_usd=0,
+        finish_reason="stop",
+    )
     base.update(overrides)
-    return base
+    return CompletionRequestCreate(**base)
 
 
 @pytest.fixture

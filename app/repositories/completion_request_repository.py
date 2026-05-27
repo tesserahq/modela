@@ -3,14 +3,15 @@ from uuid import UUID
 from sqlalchemy import Select, select
 from sqlalchemy.orm import Session
 from app.models.completion_request import CompletionRequest
+from app.schemas.completion_request import CompletionRequestCreate
 
 
 class CompletionRequestRepository:
     def __init__(self, db: Session):
         self.db = db
 
-    def create(self, data: dict) -> CompletionRequest:
-        record = CompletionRequest(**data)
+    def create(self, data: CompletionRequestCreate) -> CompletionRequest:
+        record = CompletionRequest(**data.model_dump())
         self.db.add(record)
         self.db.commit()
         self.db.refresh(record)

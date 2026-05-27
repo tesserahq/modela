@@ -1,5 +1,5 @@
 import uuid
-from sqlalchemy import Column, String, Integer, Numeric, Text, Index
+from sqlalchemy import Column, ForeignKey, String, Integer, Numeric, Text, Index
 from sqlalchemy.dialects.postgresql import UUID
 from app.db import Base
 from app.models.mixins import TimestampMixin
@@ -20,3 +20,8 @@ class CompletionRequest(Base, TimestampMixin):
     latency_ms = Column(Integer, nullable=True)
     cost_estimate_usd = Column(Numeric(12, 8), nullable=False, default=0)
     finish_reason = Column(String(50), nullable=True)
+    created_by_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )

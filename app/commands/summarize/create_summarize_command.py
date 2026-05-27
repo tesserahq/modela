@@ -68,7 +68,7 @@ class CreateSummarizeCommand:
         user_id: UUID,
     ) -> SummarizeResponse:
         config = self._resolve_config(model_slug)
-        model = build_model(config, project_id, request_id)
+        model = build_model(config, project_id, request_id, user_id=user_id)
 
         system_prompt_content = _DEFAULT_SYSTEM_PROMPT
         if config.system_prompt_id is not None:
