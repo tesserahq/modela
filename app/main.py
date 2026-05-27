@@ -98,6 +98,7 @@ def create_app(testing: bool = False, auth_middleware=None) -> FastAPI:
     from app.routers.credentials_router import router as credentials_router
     from app.routers.mcp_servers_router import router as mcp_servers_router
     from app.routers.summarize_router import router as summarize_router
+    from app.routers.analytics_router import router as analytics_router
 
     app.include_router(model_config_router)
     app.include_router(completion_request_router)
@@ -106,6 +107,7 @@ def create_app(testing: bool = False, auth_middleware=None) -> FastAPI:
     app.include_router(credentials_router)
     app.include_router(mcp_servers_router)
     app.include_router(summarize_router)
+    app.include_router(analytics_router)
 
     register_exception_handlers(app)
 

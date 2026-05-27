@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional
+from typing import Any, Optional
 from uuid import UUID
 from datetime import datetime
 from decimal import Decimal
@@ -36,3 +36,9 @@ class CompletionRequestResponse(BaseModel):
     updated_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class CostSummaryItem(BaseModel):
+    group_key: str
+    group_value: Any
+    total_cost_usd: Decimal
