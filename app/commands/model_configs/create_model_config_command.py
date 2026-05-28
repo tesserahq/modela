@@ -1,5 +1,7 @@
 import logging
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+from app.exceptions.conflict_error import ConflictError
 from app.repositories.model_config_repository import ModelConfigRepository
 from app.schemas.model_config import ModelConfigCreate, ModelConfigResponse
 
@@ -14,6 +16,6 @@ class CreateModelConfigCommand:
         try:
             record = self.model_config_repository.create(data.model_dump())
             return ModelConfigResponse.model_validate(record)
-        except Exception as e:
+        except IntegrityError:
             self.db.rollback()
-            raise Exception(f"Failed to create model config: {str(e)}")
+            raise ConflictError(f"A model config with slug '{data.slug}' already exists.")
