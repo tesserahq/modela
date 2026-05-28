@@ -18,4 +18,6 @@ class CreateModelConfigCommand:
             return ModelConfigResponse.model_validate(record)
         except IntegrityError:
             self.db.rollback()
-            raise ConflictError(f"A model config with slug '{data.slug}' already exists.")
+            raise ConflictError(
+                f"A model config with slug '{data.slug}' already exists."
+            )
