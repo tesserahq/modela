@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, AsyncIterator
 
 from pydantic_ai import Agent
 from pydantic_ai.exceptions import UnexpectedModelBehavior
@@ -74,3 +74,32 @@ class AgentRunner:
             input_tokens=usage.input_tokens or 0,
             output_tokens=usage.output_tokens or 0,
         )
+
+    async def run_stream(
+        self,
+        user_prompt: str | list,
+        *,
+        system_prompt: str | None = None,
+        message_history: list[ModelMessage] | None = None,
+        toolsets: list[AbstractToolset] | None = None,
+        max_result_retries: int | None = None,
+    ) -> AsyncIterator[str]:
+        agent = Agent(model=self._model)
+
+        history: list[ModelMessage] = list(message_history) if message_history else []
+        if system_prompt is not None:
+            history = [
+                ModelRequest(parts=[SystemPromptPart(content=system_prompt)])
+            ] + history
+
+        run_kwargs: dict = {}
+        if history:
+            run_kwargs["message_history"] = history
+        if toolsets:
+            run_kwargs["toolsets"] = toolsets
+        if max_result_retries is not None:
+            run_kwargs["max_result_retries"] = max_result_retries
+
+        async with agent.run_stream(user_prompt, **run_kwargs) as result:
+            async for delta in result.stream_text(delta=True):
+                yield delta

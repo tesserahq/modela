@@ -10,7 +10,27 @@ class MessageInput(BaseModel):
 class CompletionCreate(BaseModel):
     model: Optional[str] = None
     messages: list[MessageInput] = Field(min_length=1)
+    stream: bool = False
     extra_body: Optional[dict[str, Any]] = None
+
+
+class CompletionChunkDelta(BaseModel):
+    role: Optional[str] = None
+    content: Optional[str] = None
+
+
+class CompletionChunkChoice(BaseModel):
+    index: int
+    delta: CompletionChunkDelta
+    finish_reason: Optional[str] = None
+
+
+class CompletionChunk(BaseModel):
+    id: str
+    object: str
+    created: int
+    model: str
+    choices: list[CompletionChunkChoice]
 
 
 class CompletionChoice(BaseModel):

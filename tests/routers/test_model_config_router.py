@@ -3,6 +3,7 @@ from uuid import uuid4
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 from app.repositories.model_config_repository import ModelConfigRepository
+from app.models.system_prompt import SystemPrompt, SystemPromptVersion
 
 
 @pytest.fixture
@@ -129,3 +130,69 @@ def test_list_model_configs_response_is_paginated(client: TestClient, existing_c
     assert "items" in data
     assert "total" in data
     assert data["total"] >= 1
+
+
+def test_response_includes_null_system_prompt_when_not_set(
+    client: TestClient, existing_config
+):
+    response = client.get(f"/model-configs/{existing_config.id}")
+
+    assert response.status_code == 200
+    assert response.json()["system_prompt"] is None
+
+
+def test_response_embeds_system_prompt_when_set(
+    client: TestClient, db: Session, existing_config
+):
+    prompt = SystemPrompt(name="test-embed-prompt")
+    db.add(prompt)
+    db.flush()
+
+    version = SystemPromptVersion(
+        system_prompt_id=prompt.id,
+        content="You are a test assistant.",
+        version_number=1,
+    )
+    db.add(version)
+    db.flush()
+
+    prompt.current_version_id = version.id
+    existing_config.system_prompt_id = prompt.id
+    db.commit()
+
+    response = client.get(f"/model-configs/{existing_config.id}")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["system_prompt_id"] == str(prompt.id)
+    sp = data["system_prompt"]
+    assert sp is not None
+    assert sp["id"] == str(prompt.id)
+    assert sp["name"] == "test-embed-prompt"
+    assert sp["content"] == "You are a test assistant."
+
+
+def test_list_embeds_system_prompt(client: TestClient, db: Session, existing_config):
+    prompt = SystemPrompt(name="list-embed-prompt")
+    db.add(prompt)
+    db.flush()
+
+    version = SystemPromptVersion(
+        system_prompt_id=prompt.id,
+        content="List test prompt.",
+        version_number=1,
+    )
+    db.add(version)
+    db.flush()
+
+    prompt.current_version_id = version.id
+    existing_config.system_prompt_id = prompt.id
+    db.commit()
+
+    response = client.get("/model-configs")
+
+    assert response.status_code == 200
+    items = response.json()["items"]
+    match = next((i for i in items if i["slug"] == existing_config.slug), None)
+    assert match is not None
+    assert match["system_prompt"]["content"] == "List test prompt."

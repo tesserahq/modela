@@ -1,7 +1,8 @@
 import time
-from typing import Optional
+from contextlib import asynccontextmanager
+from typing import AsyncIterator, Optional
 from uuid import UUID
-from pydantic_ai.models import Model, ModelRequestParameters
+from pydantic_ai.models import Model, ModelRequestParameters, StreamedResponse
 from pydantic_ai.messages import ModelMessage, ModelResponse
 from pydantic_ai.settings import ModelSettings
 from app.models.model_config import ModelConfig
@@ -71,6 +72,34 @@ class ModelaModel(Model):
         )
 
         return response
+
+    @asynccontextmanager
+    async def request_stream(
+        self,
+        messages: list[ModelMessage],
+        model_settings: ModelSettings | None,
+        model_request_parameters: ModelRequestParameters,
+        run_context=None,
+    ) -> AsyncIterator[StreamedResponse]:
+        effective_settings = _apply_config_params(self._model_config, model_settings)
+        start = time.monotonic()
+        async with self._inner.request_stream(
+            messages, effective_settings, model_request_parameters, run_context
+        ) as stream:
+            yield stream
+        latency_ms = int((time.monotonic() - start) * 1000)
+        log_completion_usage.delay(
+            request_id=self._request_id,
+            project_id=self._project_id,
+            model_config_slug=self._model_config.slug,
+            provider=self._model_config.provider,
+            model=self._model_config.model,
+            input_tokens=stream._usage.input_tokens or 0,
+            output_tokens=stream._usage.output_tokens or 0,
+            finish_reason=None,
+            latency_ms=latency_ms,
+            created_by_id=str(self._user_id) if self._user_id else None,
+        )
 
 
 def _apply_config_params(

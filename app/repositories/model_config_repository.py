@@ -1,8 +1,9 @@
 from typing import Optional, List
 from uuid import UUID
 from sqlalchemy import Select, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload, joinedload
 from app.models.model_config import ModelConfig
+from app.models.system_prompt import SystemPrompt
 from app.repositories.soft_delete_repository import SoftDeleteRepository
 
 
@@ -13,6 +14,11 @@ class ModelConfigRepository(SoftDeleteRepository[ModelConfig]):
     def get_by_id(self, id: UUID) -> Optional[ModelConfig]:
         return (
             self.db.query(ModelConfig)
+            .options(
+                joinedload(ModelConfig.system_prompt).joinedload(
+                    SystemPrompt.current_version
+                )
+            )
             .filter(ModelConfig.id == id, ModelConfig.deleted_at.is_(None))
             .first()
         )
@@ -53,6 +59,11 @@ class ModelConfigRepository(SoftDeleteRepository[ModelConfig]):
     def list_query(self) -> Select:
         return (
             select(ModelConfig)
+            .options(
+                selectinload(ModelConfig.system_prompt).joinedload(
+                    SystemPrompt.current_version
+                )
+            )
             .filter(ModelConfig.deleted_at.is_(None))
             .order_by(ModelConfig.created_at.desc())
         )

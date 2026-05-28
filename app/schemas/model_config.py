@@ -2,6 +2,7 @@ from pydantic import BaseModel, Field
 from typing import Literal, Optional, Any
 from uuid import UUID
 from datetime import datetime
+from app.schemas.system_prompt import SystemPromptCompact
 
 ConfigType = Literal["chat", "summary", "generation"]
 
@@ -45,5 +46,6 @@ class ModelConfigResponse(ModelConfigBase):
     id: UUID
     created_at: datetime
     updated_at: datetime
+    system_prompt: Optional[SystemPromptCompact] = None
 
     model_config = {"from_attributes": True}

@@ -75,3 +75,25 @@ class SystemPromptCurrentRead(BaseModel):
     version_id: UUID
     version_number: int
     updated_at: datetime
+
+
+class SystemPromptCompact(BaseModel):
+    """Compact embed for system prompt on ModelConfigResponse."""
+
+    id: UUID
+    name: str
+    content: str | None = None
+
+    model_config = {"from_attributes": True}
+
+    @model_validator(mode="before")
+    @classmethod
+    def flatten_current_version(cls, v: object) -> object:
+        if hasattr(v, "current_version"):
+            cv = v.current_version
+            return {
+                "id": v.id,
+                "name": v.name,
+                "content": cv.content if cv is not None else None,
+            }
+        return v

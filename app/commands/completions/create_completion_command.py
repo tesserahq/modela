@@ -4,6 +4,7 @@ import uuid
 from typing import Optional
 from uuid import UUID
 
+from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from app.commands.completions.schema_to_model import schema_to_model
@@ -89,6 +90,48 @@ class CreateCompletionCommand:
                 "completion_tokens": result.output_tokens,
                 "total_tokens": result.input_tokens + result.output_tokens,
             },
+        )
+
+    async def stream_execute(
+        self,
+        payload: CompletionCreate,
+        project_id: str,
+        request_id: str,
+        *,
+        user_id: UUID,
+    ):
+        config = self._resolve_config(payload.model)
+
+        if config.output_schema:
+            raise HTTPException(
+                status_code=422,
+                detail="Streaming and structured outputs cannot be used together.",
+            )
+
+        tools = await MCPToolCatalogRepository(self.db).get_tools_for_model_config(
+            config.id, user_id=user_id
+        )
+
+        model = build_model(config, project_id, request_id, user_id=user_id)
+
+        system_prompt_content = None
+        if config.system_prompt_id is not None:
+            system_prompt_content = SystemPromptRepository(
+                self.db
+            ).get_current_content_by_id(config.system_prompt_id)
+
+        messages, user_prompt = _split_messages(payload.messages)
+
+        toolsets = None
+        if tools:
+            executor = MCPToolExecutor(self.db)
+            toolsets = [MCPToolset(tools, executor, user_id=user_id)]
+
+        return config.slug, AgentRunner(model).run_stream(
+            user_prompt,
+            system_prompt=system_prompt_content,
+            message_history=messages or None,
+            toolsets=toolsets,
         )
 
     def _resolve_config(self, model_slug):

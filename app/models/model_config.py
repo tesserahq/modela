@@ -64,6 +64,12 @@ class ModelConfig(Base, TimestampMixin, SoftDeleteMixin):
     is_default = Column(Boolean, nullable=False, default=False, index=True)
     max_tool_rounds = Column(Integer, nullable=True)
 
+    system_prompt = relationship(
+        "SystemPrompt",
+        foreign_keys=[system_prompt_id],
+        lazy="select",
+    )
+
     mcp_servers = relationship(
         "MCPServer",
         secondary=model_config_mcp_servers,
