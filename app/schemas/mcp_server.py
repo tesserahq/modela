@@ -8,6 +8,7 @@ from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+from app.schemas.credential import CredentialCompact
 
 
 class MCPServerBase(BaseModel):
@@ -102,6 +103,7 @@ class MCPServerRead(BaseModel):
     name: str
     url: str
     credential_id: UUID | None
+    credential: CredentialCompact | None = None
     tool_prefix: str | None
     tool_cache_ttl_seconds: int
     enabled: bool

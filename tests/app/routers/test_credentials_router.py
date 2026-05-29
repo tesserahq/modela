@@ -185,3 +185,47 @@ def test_create_credential_invalid_fields(client):
     assert data["message"] == "Invalid credential fields"
     assert len(data["details"]) == 1
     assert data["details"][0]["loc"] == ["token"]
+
+
+def test_get_credential_embeds_created_by(client, setup_credential, setup_user):
+    """GET /credentials/{id} response includes created_by with user fields."""
+    r = client.get(f"/credentials/{setup_credential.id}")
+    assert r.status_code == 200
+    data = r.json()
+    assert data["created_by_id"] == str(setup_user.id)
+    cb = data["created_by"]
+    assert cb is not None
+    assert cb["id"] == str(setup_user.id)
+    assert cb["first_name"] == setup_user.first_name
+    assert cb["last_name"] == setup_user.last_name
+
+
+def test_list_credentials_embeds_created_by(client, setup_credential, setup_user):
+    """GET /credentials list items include created_by."""
+    r = client.get("/credentials")
+    assert r.status_code == 200
+    items = r.json()["items"]
+    match = next((c for c in items if c["id"] == str(setup_credential.id)), None)
+    assert match is not None
+    assert match["created_by"]["id"] == str(setup_user.id)
+
+
+def test_credential_created_by_is_null_when_no_user(client, db):
+    """Credential created without a user has created_by=null in response."""
+    from app.services.credentials import encrypt_credential_fields
+    from app.models.credential import Credential
+
+    cred = Credential(
+        name="anon-cred",
+        type=CredentialType.BEARER_AUTH,
+        encrypted_data=encrypt_credential_fields({"token": "t"}),
+        created_by_id=None,
+    )
+    db.add(cred)
+    db.commit()
+
+    r = client.get(f"/credentials/{cred.id}")
+    assert r.status_code == 200
+    data = r.json()
+    assert data["created_by_id"] is None
+    assert data["created_by"] is None

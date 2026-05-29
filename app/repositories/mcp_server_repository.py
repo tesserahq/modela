@@ -6,7 +6,7 @@ from typing import Any, Dict, List, Optional
 from uuid import UUID
 
 from sqlalchemy import Select, select
-from sqlalchemy.orm import Query, Session
+from sqlalchemy.orm import Query, Session, joinedload, selectinload
 
 from app.models.mcp_server import MCPServer
 from app.models.model_config import model_config_mcp_servers
@@ -23,7 +23,12 @@ class MCPServerRepository(SoftDeleteRepository[MCPServer]):
 
     def get_mcp_server(self, mcp_server_id: UUID) -> Optional[MCPServer]:
         """Fetch an MCP server by ID."""
-        return self.db.query(MCPServer).filter(MCPServer.id == mcp_server_id).first()
+        return (
+            self.db.query(MCPServer)
+            .options(joinedload(MCPServer.credential))
+            .filter(MCPServer.id == mcp_server_id)
+            .first()
+        )
 
     def get_mcp_server_by_server_id(self, server_id: str) -> Optional[MCPServer]:
         """Fetch an MCP server by unique server_id."""
@@ -45,7 +50,11 @@ class MCPServerRepository(SoftDeleteRepository[MCPServer]):
 
     def get_mcp_servers_query(self) -> Query[MCPServer]:
         """Get a query for MCP servers (for pagination)."""
-        return self.db.query(MCPServer).order_by(MCPServer.server_id)
+        return (
+            self.db.query(MCPServer)
+            .options(selectinload(MCPServer.credential))
+            .order_by(MCPServer.server_id)
+        )
 
     def list_query_for_model_config(self, model_config_id: UUID) -> Select:
         """Return a select statement of non-deleted servers attached to a ModelConfig."""

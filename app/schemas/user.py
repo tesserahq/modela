@@ -4,6 +4,15 @@ from uuid import UUID
 from datetime import datetime
 
 
+class UserCompact(BaseModel):
+    id: UUID
+    first_name: str
+    last_name: str
+    email: Optional[EmailStr] = None
+
+    model_config = {"from_attributes": True}
+
+
 class UserBase(BaseModel):
     """Base user model containing common user attributes."""
 
