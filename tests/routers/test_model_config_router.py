@@ -74,6 +74,19 @@ def test_update_model_config(client: TestClient, existing_config):
     assert data["max_tokens"] == 512
 
 
+def test_update_model_config_provider_and_model(client: TestClient, existing_config):
+    response = client.put(
+        f"/model-configs/{existing_config.id}",
+        json={"provider": "anthropic", "model": "claude-sonnet-4-20250514"},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["provider"] == "anthropic"
+    assert data["model"] == "claude-sonnet-4-20250514"
+    assert data["name"] == existing_config.name
+
+
 def test_update_model_config_not_found(client: TestClient):
     response = client.put(f"/model-configs/{uuid4()}", json={"name": "X"})
 
