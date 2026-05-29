@@ -9,6 +9,9 @@ from sqlalchemy.orm import Session
 
 from app.repositories.mcp_server_repository import MCPServerRepository
 from app.schemas.mcp_server import MCPServerCreate, MCPToolsRefreshResponse
+from app.models.credential import Credential
+from app.constants.credentials import CredentialType
+from app.services.credentials import encrypt_credential_fields
 
 
 def _create_payload(**overrides):
@@ -90,6 +93,61 @@ def test_delete_mcp_server(client: TestClient, existing_mcp_server):
 
     r2 = client.get(f"/mcp-servers/{sid}")
     assert r2.status_code == 404
+
+
+def test_response_includes_null_credential_when_not_set(
+    client: TestClient, existing_mcp_server
+):
+    r = client.get(f"/mcp-servers/{existing_mcp_server.id}")
+    assert r.status_code == 200
+    assert r.json()["credential"] is None
+
+
+def test_response_embeds_credential_when_set(
+    client: TestClient, db: Session, existing_mcp_server
+):
+    cred = Credential(
+        name="mcp-test-cred",
+        type=CredentialType.BEARER_AUTH,
+        encrypted_data=encrypt_credential_fields({"token": "secret"}),
+    )
+    db.add(cred)
+    db.flush()
+    existing_mcp_server.credential_id = cred.id
+    db.commit()
+
+    r = client.get(f"/mcp-servers/{existing_mcp_server.id}")
+    assert r.status_code == 200
+    data = r.json()
+    assert data["credential_id"] == str(cred.id)
+    c = data["credential"]
+    assert c is not None
+    assert c["id"] == str(cred.id)
+    assert c["name"] == "mcp-test-cred"
+    assert c["type"] == CredentialType.BEARER_AUTH
+
+
+def test_list_embeds_credential(client: TestClient, db: Session, existing_mcp_server):
+    cred = Credential(
+        name="list-embed-cred",
+        type=CredentialType.API_KEY,
+        encrypted_data=encrypt_credential_fields(
+            {"header_name": "X-Key", "api_key": "k"}
+        ),
+    )
+    db.add(cred)
+    db.flush()
+    existing_mcp_server.credential_id = cred.id
+    db.commit()
+
+    r = client.get("/mcp-servers")
+    assert r.status_code == 200
+    items = r.json()["items"]
+    match = next(
+        (i for i in items if i["server_id"] == existing_mcp_server.server_id), None
+    )
+    assert match is not None
+    assert match["credential"]["name"] == "list-embed-cred"
 
 
 def test_refresh_mcp_server_tools(client: TestClient, existing_mcp_server):

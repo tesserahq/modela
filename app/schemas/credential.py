@@ -7,6 +7,15 @@ from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, Field
+from app.schemas.user import UserCompact
+
+
+class CredentialCompact(BaseModel):
+    id: UUID
+    name: str
+    type: str
+
+    model_config = {"from_attributes": True}
 
 
 class CredentialField(BaseModel):
@@ -90,6 +99,7 @@ class CredentialRead(BaseModel):
     name: str
     type: str
     created_by_id: UUID | None
+    created_by: UserCompact | None = None
     created_at: datetime
     updated_at: datetime
     extended_info: dict[str, Any] | None = None

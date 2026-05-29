@@ -6,7 +6,7 @@ from typing import Any, Dict, List, Optional, cast
 from uuid import UUID
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.services.credentials import (
     decrypt_credential_fields,
@@ -16,6 +16,7 @@ from app.services.credentials import (
 )
 from app.models.credential import Credential
 from app.schemas.credential import CredentialCreate, CredentialRead, CredentialUpdate
+from app.schemas.user import UserCompact
 from app.repositories.soft_delete_repository import SoftDeleteRepository
 from app.utils.db.filtering import apply_filters
 
@@ -28,7 +29,12 @@ class CredentialRepository(SoftDeleteRepository[Credential]):
 
     def get_credential(self, credential_id: UUID) -> Optional[Credential]:
         """Fetch a credential by ID."""
-        return self.db.query(Credential).filter(Credential.id == credential_id).first()
+        return (
+            self.db.query(Credential)
+            .options(joinedload(Credential.created_by))
+            .filter(Credential.id == credential_id)
+            .first()
+        )
 
     def get_credentials(
         self,
@@ -46,7 +52,11 @@ class CredentialRepository(SoftDeleteRepository[Credential]):
 
     def get_credentials_query(self):
         """Return a Select for credentials (for use with paginate(db, query))."""
-        return select(Credential).order_by(Credential.created_at.desc())
+        return (
+            select(Credential)
+            .options(selectinload(Credential.created_by))
+            .order_by(Credential.created_at.desc())
+        )
 
     def create_credential(
         self,
@@ -108,11 +118,17 @@ class CredentialRepository(SoftDeleteRepository[Credential]):
         """Build CredentialRead from a Credential with redacted fields (no secrets in response)."""
         fields = self.get_credential_fields(credential.id) or {}
         redacted = redact_credential_fields(fields)
+        created_by = (
+            UserCompact.model_validate(credential.created_by)
+            if credential.created_by is not None
+            else None
+        )
         return CredentialRead(
             id=credential.id,
             name=credential.name,
             type=credential.type,
             created_by_id=credential.created_by_id,
+            created_by=created_by,
             created_at=credential.created_at,
             updated_at=credential.updated_at,
             extended_info=None,
