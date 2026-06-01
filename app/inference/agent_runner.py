@@ -66,7 +66,7 @@ class AgentRunner:
                 )
             raise ProviderError(str(e)) from e
 
-        usage = result.usage()
+        usage = result.usage
         return AgentResult(
             output=(
                 result.output.model_dump() if output_type is not None else result.output

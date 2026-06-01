@@ -198,6 +198,7 @@ class CredentialApplier:
                 raise ValueError(
                     "Delegated Identies exchange requires user_id in execution context"
                 )
+
             audience = fields.get("audience")
             scopes = fields.get("scopes")
             if not audience or not scopes:

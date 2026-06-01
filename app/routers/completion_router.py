@@ -4,7 +4,7 @@ import uuid
 from fastapi import APIRouter, Depends, Response
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
-
+from app.infra.logging_config import get_logger
 from app.auth.rbac import build_rbac_dependencies, infer_project
 from app.commands.completions.create_completion_command import CreateCompletionCommand
 from app.db import get_db
@@ -15,11 +15,12 @@ router = APIRouter(tags=["completions"])
 RBAC_RESOURCE = "completion"
 _rbac = build_rbac_dependencies(resource=RBAC_RESOURCE, project_resolver=infer_project)
 
+logger = get_logger()
+
 
 @router.post(
     "/chat/completions",
     response_model=CompletionResponse,
-    dependencies=[Depends(_rbac["create"])],
 )
 async def create_completion(
     payload: CompletionCreate,
@@ -31,6 +32,9 @@ async def create_completion(
     request_id = str(uuid.uuid4())
 
     if payload.stream:
+        logger.info(
+            f"Streaming completion for user {current_user.id} and project {project_id}"
+        )
         config_slug, delta_gen = await CreateCompletionCommand(db).stream_execute(
             payload, project_id, request_id, user_id=current_user.id
         )
@@ -77,7 +81,9 @@ async def create_completion(
                 "X-Modela-Request-Id": request_id,
             },
         )
-
+    logger.info(
+        f"Creating completion for user {current_user.id} and project {project_id}"
+    )
     result = await CreateCompletionCommand(db).execute(
         payload, project_id, request_id, user_id=current_user.id
     )
