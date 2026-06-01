@@ -44,7 +44,7 @@ def _mock_agent_run():
 
     mock_result = MagicMock()
     mock_result.output = "Hello from the model."
-    mock_result.usage.return_value = mock_usage
+    mock_result.usage = mock_usage
     return mock_result
 
 

@@ -22,8 +22,9 @@ from pydantic_ai.messages import (
     UserPromptPart,
     TextPart,
 )
+from app.infra.logging_config import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger()
 
 
 class CreateCompletionCommand:
@@ -137,10 +138,12 @@ class CreateCompletionCommand:
     def _resolve_config(self, model_slug):
         if model_slug:
             config = self.repo.get_by_slug(model_slug)
+            logger.info(f"Resolved config for model {model_slug}: {config}")
             if config is None:
                 raise ResourceNotFoundError(f"ModelConfig '{model_slug}' not found")
             return config
         config = self.repo.get_default()
+        logger.info(f"Resolved config for model: {config}")
         if config is None:
             raise ResourceNotFoundError("No default ModelConfig is configured")
         return config
