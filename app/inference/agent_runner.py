@@ -53,7 +53,7 @@ class AgentRunner:
         if toolsets:
             run_kwargs["toolsets"] = toolsets
         if max_result_retries is not None:
-            run_kwargs["max_result_retries"] = max_result_retries
+            run_kwargs["retries"] = max_result_retries
 
         try:
             result = await agent.run(user_prompt, **run_kwargs)
@@ -98,7 +98,7 @@ class AgentRunner:
         if toolsets:
             run_kwargs["toolsets"] = toolsets
         if max_result_retries is not None:
-            run_kwargs["max_result_retries"] = max_result_retries
+            run_kwargs["retries"] = max_result_retries
 
         async with agent.run_stream(user_prompt, **run_kwargs) as result:
             async for delta in result.stream_text(delta=True):
