@@ -122,7 +122,6 @@ def test_create_version_unknown_name_returns_none(db):
 
 def test_get_system_prompts_query(db, setup_system_prompt):
     """get_system_prompts_query returns a Select ordered by name."""
-    from sqlalchemy import select
 
     repo = SystemPromptRepository(db)
     stmt = repo.get_system_prompts_query()

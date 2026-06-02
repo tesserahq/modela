@@ -12,7 +12,6 @@ from app.repositories.completion_request_repository import CompletionRequestRepo
 from app.repositories.mcp_server_repository import MCPServerRepository
 from app.repositories.model_config_repository import ModelConfigRepository
 from app.exceptions.resource_not_found_error import ResourceNotFoundError
-from app.repositories.mcp_server_repository import MCPServerRepository
 
 
 def get_model_config_by_id(

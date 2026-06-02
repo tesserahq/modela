@@ -10,7 +10,6 @@ from sqlalchemy.orm import Session
 
 from app.events.system_prompt_events import build_system_prompt_deleted_event
 from app.exceptions.conflict_error import ConflictError
-from app.models.system_prompt import SystemPrompt
 from app.repositories.system_prompt_repository import SystemPromptRepository
 from tessera_sdk.infra.events.event import Event  # type: ignore[import-untyped]
 from tessera_sdk.infra.events.nats_router import NatsEventPublisher  # type: ignore[import-untyped]

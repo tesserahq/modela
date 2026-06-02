@@ -6,7 +6,7 @@ from typing import List, Optional
 from uuid import UUID
 
 from sqlalchemy import select
-from sqlalchemy.orm import Query, Session as DBSession
+from sqlalchemy.orm import Session as DBSession
 
 from app.models.system_prompt import SystemPrompt, SystemPromptVersion
 

@@ -154,7 +154,7 @@ class DocumentAnalyzer:
                             return result
                         else:
                             logger.debug(
-                                f"MRZ found but invalid score and no attributes extracted"
+                                "MRZ found but invalid score and no attributes extracted"
                             )
                     else:
                         logger.debug("No MRZ detected")

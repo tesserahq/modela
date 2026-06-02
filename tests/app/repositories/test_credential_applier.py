@@ -1,6 +1,5 @@
 """Tests for CredentialApplier."""
 
-from uuid import uuid4
 
 import pytest
 
