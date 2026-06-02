@@ -1,6 +1,5 @@
 """Tests for CredentialApplier."""
 
-
 import pytest
 
 from app.constants.credentials import CredentialType

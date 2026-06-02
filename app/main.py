@@ -135,6 +135,7 @@ if settings.otel_enabled:
 def main_route():
     return {"message": "Hey, It is me Goku"}
 
+
 @app.get("/openapi.json")
 async def openapi(_user: User = Depends(get_current_user)):
     return get_openapi(title="FastAPI", version="0.1.0", routes=app.routes)
