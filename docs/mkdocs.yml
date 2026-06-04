@@ -1,0 +1,18 @@
+site_name: Modela Documentation
+site_description: Data modeling service documentation
+
+docs_dir: .
+
+nav:
+  - Home: README.md
+  - Guides:
+      - Document Summarization: guides/document-summarization.md
+  - Integrations:
+      - Overview: integrations/README.md
+      - Tessera FWJ: integrations/tessera-fwj.md
+
+plugins:
+  - techdocs-core
+
+exclude_docs: |
+  mkdocs.yml
