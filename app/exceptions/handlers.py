@@ -2,6 +2,7 @@ from traceback import format_exc
 from fastapi import FastAPI, Request, status
 from fastapi.responses import JSONResponse
 from app.exceptions.conflict_error import ConflictError
+from app.exceptions.invalid_parameter_error import InvalidParameterError
 from app.exceptions.resource_not_found_error import ResourceNotFoundError
 from app.exceptions.provider_errors import ProviderError, ProviderTimeoutError
 from app.exceptions.structured_output_validation_error import (
@@ -14,6 +15,13 @@ def register_exception_handlers(app: FastAPI) -> None:
     async def conflict_handler(request: Request, exc: ConflictError):
         return JSONResponse(
             status_code=status.HTTP_409_CONFLICT,
+            content={"detail": str(exc)},
+        )
+
+    @app.exception_handler(InvalidParameterError)
+    async def invalid_parameter_handler(request: Request, exc: InvalidParameterError):
+        return JSONResponse(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             content={"detail": str(exc)},
         )
 

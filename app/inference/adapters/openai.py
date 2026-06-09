@@ -2,12 +2,16 @@ from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openai import OpenAIProvider
 from app.config import get_settings
 from app.inference.adapters.base import BaseProviderAdapter
-from app.schemas.provider import ProviderModelSchema
+from app.schemas.provider import ParameterSpec, ProviderModelSchema, ProviderParameters
 
 
 class OpenAIProviderAdapter(BaseProviderAdapter):
     provider_id = "openai"
     provider_name = "OpenAI"
+    parameters = ProviderParameters(
+        temperature=ParameterSpec(default=1.0, min=0.0, max=2.0),
+        top_p=ParameterSpec(default=1.0, min=0.0, max=1.0),
+    )
 
     _models = [
         ProviderModelSchema(id="gpt-4.1", name="GPT-4.1"),

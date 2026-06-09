@@ -1,11 +1,12 @@
 from abc import ABC, abstractmethod
 from pydantic_ai.models import Model
-from app.schemas.provider import ProviderModelSchema
+from app.schemas.provider import ProviderModelSchema, ProviderParameters
 
 
 class BaseProviderAdapter(ABC):
     provider_id: str
     provider_name: str
+    parameters: ProviderParameters | None = None
 
     @abstractmethod
     def create_model(self, model_name: str, api_key: str | None = None) -> Model:

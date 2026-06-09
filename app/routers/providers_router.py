@@ -34,6 +34,7 @@ def list_providers(
             id=adapter.provider_id,
             name=adapter.provider_name,
             models=adapter.list_models(),
+            parameters=adapter.parameters,
         )
         for adapter in PROVIDER_REGISTRY.values()
     ]

@@ -2,12 +2,17 @@ from pydantic_ai.models.anthropic import AnthropicModel
 from pydantic_ai.providers.anthropic import AnthropicProvider
 from app.config import get_settings
 from app.inference.adapters.base import BaseProviderAdapter
-from app.schemas.provider import ProviderModelSchema
+from app.schemas.provider import ParameterSpec, ProviderModelSchema, ProviderParameters
 
 
 class AnthropicProviderAdapter(BaseProviderAdapter):
     provider_id = "anthropic"
     provider_name = "Anthropic"
+    parameters = ProviderParameters(
+        temperature=ParameterSpec(default=1.0, min=0.0, max=1.0),
+        top_p=ParameterSpec(min=0.0, max=1.0),
+        exclusive_parameter_groups=[["temperature", "top_p"]],
+    )
 
     _models = [
         ProviderModelSchema(id="claude-fable-5", name="Claude Fable 5"),

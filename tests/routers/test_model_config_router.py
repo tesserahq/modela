@@ -126,6 +126,43 @@ def test_create_sets_default_clears_previous(
     assert previous.is_default is False
 
 
+def test_create_anthropic_config_rejects_temperature_and_top_p_together(
+    client: TestClient,
+):
+    response = client.post(
+        "/model-configs",
+        json={
+            "slug": "anthropic-both",
+            "name": "Anthropic Both",
+            "provider": "anthropic",
+            "model": "claude-sonnet-4-20250514",
+            "temperature": 0.7,
+            "top_p": 0.9,
+        },
+    )
+
+    assert response.status_code == 422
+    assert "temperature and top_p cannot both be set" in response.json()["detail"]
+
+
+def test_create_anthropic_config_rejects_temperature_above_provider_max(
+    client: TestClient,
+):
+    response = client.post(
+        "/model-configs",
+        json={
+            "slug": "anthropic-hot",
+            "name": "Anthropic Hot",
+            "provider": "anthropic",
+            "model": "claude-sonnet-4-20250514",
+            "temperature": 1.5,
+        },
+    )
+
+    assert response.status_code == 422
+    assert "temperature must be <= 1.0" in response.json()["detail"]
+
+
 def test_create_model_config_invalid_payload_returns_422(client: TestClient):
     response = client.post(
         "/model-configs",

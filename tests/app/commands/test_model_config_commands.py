@@ -9,6 +9,7 @@ from app.commands.model_configs.update_model_config_command import (
 from app.commands.model_configs.delete_model_config_command import (
     DeleteModelConfigCommand,
 )
+from app.exceptions.invalid_parameter_error import InvalidParameterError
 from app.repositories.model_config_repository import ModelConfigRepository
 from app.schemas.model_config import (
     ModelConfigCreate,
@@ -51,6 +52,22 @@ def test_create_returns_response(db: Session, create_payload):
     assert result.id is not None
 
 
+def test_create_rejects_anthropic_temperature_above_provider_max(
+    db: Session, create_payload
+):
+    payload = create_payload.model_copy(
+        update={
+            "slug": "anthropic-invalid",
+            "provider": "anthropic",
+            "model": "claude-sonnet-4-20250514",
+            "temperature": 1.5,
+        }
+    )
+
+    with pytest.raises(InvalidParameterError, match="temperature must be <= 1.0"):
+        CreateModelConfigCommand(db).execute(payload)
+
+
 def test_create_persists_to_db(db: Session, create_payload):
     result = CreateModelConfigCommand(db).execute(create_payload)
 
@@ -71,6 +88,15 @@ def test_update_returns_updated_response(db: Session, existing_config):
     assert result.name == "Renamed Config"
     assert result.max_tokens == 500
     assert result.slug == existing_config.slug
+
+
+def test_update_rejects_anthropic_temperature_above_provider_max(
+    db: Session, existing_config
+):
+    payload = ModelConfigUpdate(provider="anthropic", temperature=1.5)
+
+    with pytest.raises(InvalidParameterError, match="temperature must be <= 1.0"):
+        UpdateModelConfigCommand(db).execute(existing_config, payload)
 
 
 def test_update_partial_fields_unchanged(db: Session, existing_config):

@@ -2,6 +2,7 @@ import logging
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from app.exceptions.conflict_error import ConflictError
+from app.inference.adapters.parameter_validation import validate_model_config_parameters
 from app.repositories.model_config_repository import ModelConfigRepository
 from app.schemas.model_config import ModelConfigCreate, ModelConfigResponse
 
@@ -13,6 +14,12 @@ class CreateModelConfigCommand:
         self.logger = logging.getLogger(__name__)
 
     def execute(self, data: ModelConfigCreate) -> ModelConfigResponse:
+        validate_model_config_parameters(
+            data.provider,
+            temperature=data.temperature,
+            max_tokens=data.max_tokens,
+            top_p=data.top_p,
+        )
         try:
             record = self.model_config_repository.create(data.model_dump())
             return ModelConfigResponse.model_validate(record)

@@ -5,6 +5,10 @@ from uuid import UUID
 from pydantic_ai.models import Model, ModelRequestParameters, StreamedResponse
 from pydantic_ai.messages import ModelMessage, ModelResponse
 from pydantic_ai.settings import ModelSettings
+from app.inference.adapters.parameter_validation import (
+    clamp_model_config_parameter,
+    resolve_provider_settings,
+)
 from app.models.model_config import ModelConfig
 from app.tasks.log_completion_usage import log_completion_usage
 
@@ -107,9 +111,15 @@ def _apply_config_params(
 ) -> ModelSettings:
     settings: dict = dict(model_settings or {})
     if config.temperature is not None:
-        settings["temperature"] = config.temperature
+        settings["temperature"] = clamp_model_config_parameter(
+            config.provider, "temperature", config.temperature
+        )
     if config.max_tokens is not None:
-        settings["max_tokens"] = config.max_tokens
+        settings["max_tokens"] = clamp_model_config_parameter(
+            config.provider, "max_tokens", config.max_tokens
+        )
     if config.top_p is not None:
-        settings["top_p"] = config.top_p
-    return settings  # type: ignore[return-value]
+        settings["top_p"] = clamp_model_config_parameter(
+            config.provider, "top_p", config.top_p
+        )
+    return resolve_provider_settings(config.provider, settings)  # type: ignore[return-value]
