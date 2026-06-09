@@ -41,7 +41,7 @@ class TestAgentRunnerRun:
             await runner.run("hello", max_result_retries=3)
 
         _, kwargs = agent.run.call_args
-        assert kwargs.get("max_result_retries") == 3
+        assert kwargs.get("output_retries") == 3
         assert "retries" not in kwargs
 
     @pytest.mark.asyncio
@@ -51,7 +51,7 @@ class TestAgentRunnerRun:
             await runner.run("hello")
 
         _, kwargs = agent.run.call_args
-        assert "max_result_retries" not in kwargs
+        assert "output_retries" not in kwargs
         assert "retries" not in kwargs
 
     @pytest.mark.asyncio
@@ -91,7 +91,7 @@ class TestAgentRunnerRunStream:
             chunks = [c async for c in runner.run_stream("hello", max_result_retries=5)]
 
         _, kwargs = agent.run_stream.call_args
-        assert kwargs.get("max_result_retries") == 5
+        assert kwargs.get("output_retries") == 5
         assert "retries" not in kwargs
         assert chunks == ["chunk"]
 
@@ -108,5 +108,5 @@ class TestAgentRunnerRunStream:
             chunks = [c async for c in runner.run_stream("hello")]
 
         _, kwargs = agent.run_stream.call_args
-        assert "max_result_retries" not in kwargs
+        assert "output_retries" not in kwargs
         assert "retries" not in kwargs
