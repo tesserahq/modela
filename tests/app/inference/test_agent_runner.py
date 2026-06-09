@@ -8,7 +8,7 @@ def _make_mock_result(output="response text", input_tokens=5, output_tokens=10):
     usage.output_tokens = output_tokens
     result = MagicMock()
     result.output = output
-    result.usage = usage
+    result.usage = MagicMock(return_value=usage)
     return result
 
 
