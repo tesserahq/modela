@@ -259,14 +259,14 @@ files = [
 
 [[package]]
 name = "anthropic"
-version = "0.107.1"
+version = "0.109.0"
 description = "The official Python library for the anthropic API"
 optional = false
 python-versions = ">=3.9"
 groups = ["main"]
 files = [
-    {file = "anthropic-0.107.1-py3-none-any.whl", hash = "sha256:b74338d08000ba105dfc8adae29af3713ece845a4bffec9986a20697e087c7b3"},
-    {file = "anthropic-0.107.1.tar.gz", hash = "sha256:8e7169a6ab57fb806b778d9af018c867bad688144efec8969cdb4c5ccecd6670"},
+    {file = "anthropic-0.109.0-py3-none-any.whl", hash = "sha256:b5d930af26fdeeb7c7e7a6ff6c4bcdaf46ee50403b26ada25d08fd853c751fff"},
+    {file = "anthropic-0.109.0.tar.gz", hash = "sha256:86719114c62f21b50bf7148a373371605f065d22e6eeee3d4d361ac0ea079d0e"},
 ]
 
 [package.dependencies]
@@ -518,18 +518,18 @@ uvloop = ["uvloop (>=0.15.2) ; sys_platform != \"win32\"", "winloop (>=0.5.0) ; 
 
 [[package]]
 name = "boto3"
-version = "1.43.25"
+version = "1.43.26"
 description = "The AWS SDK for Python"
 optional = false
 python-versions = ">=3.10"
 groups = ["main"]
 files = [
-    {file = "boto3-1.43.25-py3-none-any.whl", hash = "sha256:e4e2515533a1593eb2302e9eda5baf4e1510abb219b41dd0db4696cc21bc5039"},
-    {file = "boto3-1.43.25.tar.gz", hash = "sha256:91f3deb0dfc32403a187f57c19a78dc8e38d25ee2967a511fa8905acf00cc074"},
+    {file = "boto3-1.43.26-py3-none-any.whl", hash = "sha256:7c88bfbde6abcf062d04ac410a1cf4eaf8675f025f35f3ad9accc9b0224ce6b9"},
+    {file = "boto3-1.43.26.tar.gz", hash = "sha256:33f027b7911dffe84f4896b66024c228eb856f4cf8c1ff3465be0eae1f413731"},
 ]
 
 [package.dependencies]
-botocore = ">=1.43.25,<1.44.0"
+botocore = ">=1.43.26,<1.44.0"
 jmespath = ">=0.7.1,<2.0.0"
 s3transfer = ">=0.18.0,<0.19.0"
 
@@ -538,14 +538,14 @@ crt = ["botocore[crt] (>=1.21.0,<2.0a0)"]
 
 [[package]]
 name = "botocore"
-version = "1.43.25"
+version = "1.43.26"
 description = "Low-level, data-driven core of boto 3."
 optional = false
 python-versions = ">=3.10"
 groups = ["main"]
 files = [
-    {file = "botocore-1.43.25-py3-none-any.whl", hash = "sha256:ef1d210ac9085ea0e5fc6ad2e63f0c7e97103c74f52156bf944289aaf6278d1b"},
-    {file = "botocore-1.43.25.tar.gz", hash = "sha256:faab543ca6ae6f8fdc5f6318240bebfb8c05cd25823715fe02aad7edf0c4b383"},
+    {file = "botocore-1.43.26-py3-none-any.whl", hash = "sha256:eeb92265bae289555182a46341c998a656ab49c0dbdb762c65b30fe354fcc9e8"},
+    {file = "botocore-1.43.26.tar.gz", hash = "sha256:fd9280ac868194afcee59c7def62e0031fb4b599f7ef85360d30c7e42357c1dc"},
 ]
 
 [package.dependencies]
@@ -1084,14 +1084,14 @@ ssh = ["bcrypt (>=3.1.5)"]
 
 [[package]]
 name = "cyclopts"
-version = "4.16.1"
+version = "4.17.0"
 description = "Intuitive, easy CLIs based on type hints."
 optional = false
 python-versions = ">=3.10"
 groups = ["main"]
 files = [
-    {file = "cyclopts-4.16.1-py3-none-any.whl", hash = "sha256:617795392c4113a2c2cc7af716f20244900e87f23daa05442d1268d81472a592"},
-    {file = "cyclopts-4.16.1.tar.gz", hash = "sha256:8aa47bf92a5fb33abca5af05e576eecdb0d2f79893ad29238046df78370fc4a8"},
+    {file = "cyclopts-4.17.0-py3-none-any.whl", hash = "sha256:6ee947c9f3bbe9679b9fa9cea1bb327298db80b302df62d7f1d1bd82726508e0"},
+    {file = "cyclopts-4.17.0.tar.gz", hash = "sha256:6b3231f18b404879e978214ef26fa174e8b505bd0f2117290b4135560666004b"},
 ]
 
 [package.dependencies]
@@ -2741,14 +2741,14 @@ zookeeper = ["kazoo (>=2.8.0)"]
 
 [[package]]
 name = "logfire"
-version = "4.35.0"
+version = "4.36.0"
 description = "The best Python observability tool! 🪵🔥"
 optional = false
 python-versions = ">=3.10"
 groups = ["main"]
 files = [
-    {file = "logfire-4.35.0-py3-none-any.whl", hash = "sha256:9ae5c3f2dd81144ccf1ec6dba1a5de84aff5b2e2b8dd2190e53e87e47bc63711"},
-    {file = "logfire-4.35.0.tar.gz", hash = "sha256:6542aa4ac5e2d2369587deab57a0d1bb9cf6da49634c8cd9c5dbd7c7581f3d51"},
+    {file = "logfire-4.36.0-py3-none-any.whl", hash = "sha256:8ccb2f276fe46888d7ef90aa7ba7ade0c053946666b9218c5115688316bf6d04"},
+    {file = "logfire-4.36.0.tar.gz", hash = "sha256:a29db1ad6a8ab90e20ac53db75118e3b59c75210c6b9e5c124754eed2845bb84"},
 ]
 
 [package.dependencies]
@@ -2788,19 +2788,19 @@ sqlalchemy = ["opentelemetry-instrumentation-sqlalchemy (>=0.42b0)"]
 sqlite3 = ["opentelemetry-instrumentation-sqlite3 (>=0.42b0)"]
 starlette = ["opentelemetry-instrumentation-starlette (>=0.42b0)"]
 system-metrics = ["opentelemetry-instrumentation-system-metrics (>=0.42b0)"]
-variables = ["pydantic (>=2)"]
+variables = ["pydantic (>=2)", "pydantic-handlebars (>=0.2.1)"]
 wsgi = ["opentelemetry-instrumentation-wsgi (>=0.42b0)"]
 
 [[package]]
 name = "logfire-api"
-version = "4.35.0"
+version = "4.36.0"
 description = "Shim for the Logfire SDK which does nothing unless Logfire is installed"
 optional = false
 python-versions = ">=3.10"
 groups = ["main"]
 files = [
-    {file = "logfire_api-4.35.0-py3-none-any.whl", hash = "sha256:c8eb8f49c261c09b3d815b22ecba1c5224e8ba9aa9b546b0afcdb13a89fa6bfe"},
-    {file = "logfire_api-4.35.0.tar.gz", hash = "sha256:dcc073c7e337b0005f63075cf89951bacf00944b7c7420c2422b18133c8d2605"},
+    {file = "logfire_api-4.36.0-py3-none-any.whl", hash = "sha256:e2898270969d05b654366b8179576a741065bb22a031078088045ff6ffead0e7"},
+    {file = "logfire_api-4.36.0.tar.gz", hash = "sha256:02167aa9e689f4807c633051eaf989577155553bf0f9f2a54c8c739f8a2646c6"},
 ]
 
 [[package]]
@@ -5538,14 +5538,14 @@ testing = ["datasets", "numpy", "pytest", "pytest-asyncio", "requests", "ruff", 
 
 [[package]]
 name = "tqdm"
-version = "4.68.1"
+version = "4.68.2"
 description = "Fast, Extensible Progress Meter"
 optional = false
 python-versions = ">=3.7"
 groups = ["main"]
 files = [
-    {file = "tqdm-4.68.1-py3-none-any.whl", hash = "sha256:fea4a90e4023f764914569f7802a297277c5ab1a66be5144143e142e1a4031d8"},
-    {file = "tqdm-4.68.1.tar.gz", hash = "sha256:fc163d96b287bd031e1aa24421ce4411b25559bd0a1be4fe649bdaa4d2c02bf5"},
+    {file = "tqdm-4.68.2-py3-none-any.whl", hash = "sha256:d4240441fb5353290b87d6a85968c9decc131a99b8c7faa28269d829de669ede"},
+    {file = "tqdm-4.68.2.tar.gz", hash = "sha256:89c230e8dbc67c7615c142487111222f878c77427ea09549960f62389e258add"},
 ]
 
 [package.dependencies]
