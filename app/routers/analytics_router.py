@@ -9,6 +9,7 @@ from app.auth.rbac import build_rbac_dependencies, infer_domain
 from app.db import get_db
 from app.repositories.completion_request_repository import CompletionRequestRepository
 from app.schemas.completion_request import CostSummaryItem
+from app.services.cost_analytics import attach_group_details
 from tessera_sdk.server.dependencies.auth import get_current_user
 
 router = APIRouter(prefix="/analytics", tags=["analytics"])
@@ -45,7 +46,7 @@ def get_cost_summary(
         limit=limit,
     )
     rows = db.execute(query).all()
-    return [
+    items = [
         CostSummaryItem(
             group_key=group_by,
             group_value=row.group_value,
@@ -53,3 +54,4 @@ def get_cost_summary(
         )
         for row in rows
     ]
+    return attach_group_details(group_by, items, db)

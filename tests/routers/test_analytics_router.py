@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.models.user import User
 from app.repositories.completion_request_repository import CompletionRequestRepository
+from app.repositories.user_repository import UserRepository
 from app.schemas.completion_request import CompletionRequestCreate
 
 
@@ -138,6 +139,79 @@ def test_costs_group_by_user(client: TestClient, db: Session):
     assert by_user[str(user_a.id)] == Decimal("7.00")
     assert by_user[str(user_b.id)] == Decimal("1.00")
     assert by_user[None] == Decimal("0.50")
+
+
+def test_costs_group_by_user_includes_group_details(client: TestClient, db: Session):
+    user_a = _make_user(db)
+    user_b = _make_user(db)
+    _create(db, created_by_id=user_a.id, cost_estimate_usd=Decimal("5.00"))
+    _create(db, created_by_id=user_b.id, cost_estimate_usd=Decimal("1.00"))
+
+    resp = client.get("/analytics/costs", params={"group_by": "user"})
+
+    assert resp.status_code == 200
+    by_user = {row["group_value"]: row for row in resp.json()}
+
+    details_a = by_user[str(user_a.id)]["group_details"]
+    assert details_a == {
+        "id": str(user_a.id),
+        "first_name": user_a.first_name,
+        "last_name": user_a.last_name,
+        "email": user_a.email,
+    }
+
+    details_b = by_user[str(user_b.id)]["group_details"]
+    assert details_b == {
+        "id": str(user_b.id),
+        "first_name": user_b.first_name,
+        "last_name": user_b.last_name,
+        "email": user_b.email,
+    }
+
+
+def test_costs_group_by_user_null_bucket_has_null_group_details(
+    client: TestClient, db: Session
+):
+    _create(db, created_by_id=None, cost_estimate_usd=Decimal("0.50"))
+
+    resp = client.get("/analytics/costs", params={"group_by": "user"})
+
+    assert resp.status_code == 200
+    rows = resp.json()
+    assert len(rows) == 1
+    assert rows[0]["group_value"] is None
+    assert rows[0]["group_details"] is None
+
+
+def test_costs_group_by_provider_has_null_group_details(
+    client: TestClient, db: Session
+):
+    _create(db, provider="openai", cost_estimate_usd=Decimal("2.00"))
+
+    resp = client.get("/analytics/costs", params={"group_by": "provider"})
+
+    assert resp.status_code == 200
+    for row in resp.json():
+        assert row["group_details"] is None
+
+
+def test_costs_group_by_user_includes_soft_deleted_user_details(
+    client: TestClient, db: Session
+):
+    user = _make_user(db)
+    _create(db, created_by_id=user.id, cost_estimate_usd=Decimal("3.00"))
+    UserRepository(db).delete_user(user.id)
+
+    resp = client.get("/analytics/costs", params={"group_by": "user"})
+
+    assert resp.status_code == 200
+    row = resp.json()[0]
+    assert row["group_details"] == {
+        "id": str(user.id),
+        "first_name": user.first_name,
+        "last_name": user.last_name,
+        "email": user.email,
+    }
 
 
 # ---------------------------------------------------------------------------

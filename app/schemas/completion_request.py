@@ -1,8 +1,10 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Any, Optional
 from uuid import UUID
 from datetime import datetime
 from decimal import Decimal
+
+from app.schemas.user import UserCompact
 
 
 class CompletionRequestCreate(BaseModel):
@@ -42,3 +44,10 @@ class CostSummaryItem(BaseModel):
     group_key: str
     group_value: Any
     total_cost_usd: Decimal
+    group_details: UserCompact | None = Field(
+        default=None,
+        description=(
+            "Populated when group_key is 'user' and group_value is a known user id; "
+            "null for unattributed rows, missing users, and non-user dimensions."
+        ),
+    )

@@ -41,6 +41,16 @@ class UserRepository(SoftDeleteRepository[User]):
     def get_users(self, skip: int = 0, limit: int = 100) -> List[User]:
         return self.db.query(User).offset(skip).limit(limit).all()
 
+    def get_users_by_ids(self, user_ids: list[UUID]) -> list[User]:
+        if not user_ids:
+            return []
+        return (
+            self.db.query(User)
+            .filter(User.id.in_(user_ids))
+            .execution_options(skip_soft_delete_filter=True)
+            .all()
+        )
+
     def create_user(self, user: UserCreate) -> User:
         db_user = User(**user.model_dump())
         self.db.add(db_user)
