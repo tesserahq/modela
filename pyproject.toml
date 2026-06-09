@@ -29,21 +29,21 @@ sqlalchemy = "^2.0.39"
 asyncpg = "^0.31.0"
 gunicorn = "26.0.0"
 alembic = "^1.15.1"
-faker = "40.19.1"
+faker = "40.21.0"
 psycopg2-binary = "^2.9.10"
 pydantic = {extras = ["email"], version = "^2.11.3"}
 black = "^26.5.1"
-ruff = "0.15.14"
+ruff = "0.15.16"
 pydantic-settings = "^2.9.1"
 python-jose = "^3.3.0"
 
-opentelemetry-instrumentation-fastapi = "^0.60b1"
-opentelemetry-exporter-otlp-proto-grpc = "^1.39.1"
-opentelemetry-sdk = "^1.39.1"
-opentelemetry-instrumentation-sqlalchemy = "^0.60b1"
-opentelemetry-instrumentation-logging = "^0.60b1"
+opentelemetry-instrumentation-fastapi = "^0.63b1"
+opentelemetry-exporter-otlp-proto-grpc = "^1.42.1"
+opentelemetry-sdk = "^1.42.1"
+opentelemetry-instrumentation-sqlalchemy = "^0.63b1"
+opentelemetry-instrumentation-logging = "^0.63b1"
 prometheus-client = ">=0.23.1"
-opentelemetry-instrumentation-requests = "^0.60b1"
+opentelemetry-instrumentation-requests = "^0.63b1"
 
 requests = "^2.32.3"
 pyjwt = "^2.10.1"
@@ -59,14 +59,14 @@ tessera-sdk = { git = "https://github.com/tesserahq/tessera-sdk-py.git", branch 
 pytz = "^2026"
 postmarker = "^1.0"
 mako = "^1.3.10"
-faststream = {extras = ["nats"], version = "^0.6.3"}
+faststream = {extras = ["nats"], version = "^0.7.0"}
 pydantic-ai = {extras = ["openai"], version = "^1.89.1"}
 fastmcp = "^3.3.1"
 fastmcp-slim = {extras = ["client"], version = "^3.3.1"}
 
 [tool.poetry.dependencies.uvicorn]
 extras = [ "standard" ]
-version = "^0.48.0"
+version = "^0.49.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^9.0.0"
