@@ -34,6 +34,7 @@ class CompletionRequestResponse(BaseModel):
     cost_estimate_usd: Decimal
     finish_reason: Optional[str] = None
     created_by_id: Optional[UUID] = None
+    created_by: UserCompact | None = None
     created_at: datetime
     updated_at: datetime
 

@@ -82,3 +82,51 @@ def test_list_completion_requests_empty(client: TestClient):
     data = response.json()
     assert data["items"] == []
     assert data["total"] == 0
+
+
+def test_get_completion_request_embeds_created_by(
+    client: TestClient, db: Session, setup_user
+):
+    record = CompletionRequestRepository(db).create(
+        _record_payload(created_by_id=setup_user.id)
+    )
+
+    response = client.get(f"/completion-requests/{record.id}")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["created_by_id"] == str(setup_user.id)
+    cb = data["created_by"]
+    assert cb is not None
+    assert cb["id"] == str(setup_user.id)
+    assert cb["first_name"] == setup_user.first_name
+    assert cb["last_name"] == setup_user.last_name
+
+
+def test_list_completion_requests_embeds_created_by(
+    client: TestClient, db: Session, setup_user
+):
+    record = CompletionRequestRepository(db).create(
+        _record_payload(created_by_id=setup_user.id)
+    )
+
+    response = client.get("/completion-requests")
+
+    assert response.status_code == 200
+    match = next(
+        (item for item in response.json()["items"] if item["id"] == str(record.id)),
+        None,
+    )
+    assert match is not None
+    assert match["created_by"]["id"] == str(setup_user.id)
+
+
+def test_completion_request_created_by_is_null_when_no_user(
+    client: TestClient, existing_request
+):
+    response = client.get(f"/completion-requests/{existing_request.id}")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["created_by_id"] is None
+    assert data["created_by"] is None

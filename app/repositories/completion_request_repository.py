@@ -2,7 +2,7 @@ from datetime import date, timedelta, datetime, timezone
 from typing import Optional
 from uuid import UUID
 from sqlalchemy import Select, func, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload, selectinload
 from app.models.completion_request import CompletionRequest
 from app.schemas.completion_request import CompletionRequestCreate
 
@@ -20,11 +20,16 @@ class CompletionRequestRepository:
 
     def get_by_id(self, id: UUID) -> Optional[CompletionRequest]:
         return (
-            self.db.query(CompletionRequest).filter(CompletionRequest.id == id).first()
+            self.db.query(CompletionRequest)
+            .options(joinedload(CompletionRequest.created_by))
+            .filter(CompletionRequest.id == id)
+            .first()
         )
 
     def list_query(self, project_id: Optional[str] = None) -> Select:
-        query = select(CompletionRequest)
+        query = select(CompletionRequest).options(
+            selectinload(CompletionRequest.created_by)
+        )
         if project_id is not None:
             query = query.filter(CompletionRequest.project_id == project_id)
         return query.order_by(CompletionRequest.created_at.desc())
