@@ -92,29 +92,13 @@
       "items": {
         "type": "object",
         "properties": {
-          "severity": { "type": "string", "description": "error | warning | info" },
+          "severity": {
+            "type": "string",
+            "description": "error | warning | info"
+          },
           "code": { "type": "string" },
           "message": { "type": "string" },
           "field": { "type": "string" }
-        }
-      }
-    },
-
-    "suggested_actions": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "properties": {
-          "action": {
-            "type": "string",
-            "description": "create_record | update_record | confirm_fields | link_to_person | manual_review"
-          },
-          "reason": { "type": "string" },
-          "priority": { "type": "string", "description": "high | medium | low" },
-          "affected_fields": {
-            "type": "array",
-            "items": { "type": "string" }
-          }
         }
       }
     }
