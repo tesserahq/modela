@@ -4,7 +4,7 @@ from uuid import UUID
 from datetime import datetime
 from app.schemas.system_prompt import SystemPromptCompact
 
-ConfigType = Literal["chat", "summary", "generation"]
+ConfigType = Literal["chat", "summary", "generation", "scan"]
 
 
 class MCPServerAttachRequest(BaseModel):
