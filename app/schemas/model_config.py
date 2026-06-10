@@ -7,10 +7,10 @@ from app.schemas.system_prompt import SystemPromptCompact
 ConfigType = Literal["chat", "summary", "generation", "scan"]
 
 _CONFIG_TYPE_META: dict[str, tuple[str, str]] = {
-    "chat":       ("Chat",       "General-purpose conversational completions."),
-    "summary":    ("Summary",    "Summarizes documents or text content into concise output."),
+    "chat": ("Chat", "General-purpose conversational completions."),
+    "summary": ("Summary", "Summarizes documents or text content into concise output."),
     "generation": ("Generation", "Generates text or structured content from a prompt."),
-    "scan":       ("Scan",       "Extracts structured data from uploaded documents or images."),
+    "scan": ("Scan", "Extracts structured data from uploaded documents or images."),
 }
 
 
