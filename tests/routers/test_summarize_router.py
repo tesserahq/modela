@@ -206,6 +206,20 @@ def test_summarize_file_with_explicit_mime_type(
     assert response.status_code == 200
 
 
+def test_summarize_file_with_image_mime_type(
+    client: TestClient, default_summary_config
+):
+    response = client.post(
+        "/summarize/file",
+        json={
+            "file_url": "https://example.com/photo.jpg",
+            "mime_type": "image/jpeg",
+        },
+    )
+
+    assert response.status_code == 200
+
+
 def test_summarize_file_unknown_slug(client: TestClient):
     response = client.post(
         "/summarize/file",
