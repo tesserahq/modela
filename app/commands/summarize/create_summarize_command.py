@@ -1,7 +1,7 @@
 import logging
 from uuid import UUID
 
-from pydantic_ai.messages import DocumentUrl
+from pydantic_ai.messages import DocumentUrl, ImageUrl
 from sqlalchemy.orm import Session
 
 from app.exceptions.resource_not_found_error import ResourceNotFoundError
@@ -12,6 +12,15 @@ from app.schemas.summarize import SummarizeResponse
 from app.utils.url_validation import validate_file_url
 
 logger = logging.getLogger(__name__)
+
+_IMAGE_MIME_TYPES = {"image/jpeg", "image/png", "image/gif", "image/webp"}
+
+
+def _make_content_part(url: str, mime_type: str) -> ImageUrl | DocumentUrl:
+    if mime_type in _IMAGE_MIME_TYPES:
+        return ImageUrl(url=url, media_type=mime_type)
+    return DocumentUrl(url=url, media_type=mime_type)
+
 
 _DEFAULT_SYSTEM_PROMPT = "Summarize the following document concisely."
 
@@ -52,7 +61,7 @@ class CreateSummarizeCommand:
         return await self._execute(
             user_prompt=[
                 "Please summarize the following document.",
-                DocumentUrl(url=file_url, media_type=mime_type),
+                _make_content_part(file_url, mime_type),
             ],
             model_slug=model_slug,
             project_id=project_id,
