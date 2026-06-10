@@ -1,0 +1,122 @@
+{
+  "type": "object",
+  "required": ["document_type", "document_category", "confidence", "fields"],
+  "properties": {
+    "document_type": {
+      "type": "string",
+      "description": "driver_license | passport | ssn_card | birth_certificate | insurance_card | vehicle_title | vehicle_registration | deed | will | other"
+    },
+    "document_category": {
+      "type": "string",
+      "description": "identity_document | legal | property | vehicle | financial | other"
+    },
+    "confidence": {
+      "type": "number",
+      "description": "Overall scan confidence 0.0–1.0"
+    },
+    "issuing_authority": { "type": "string" },
+    "issuing_country": { "type": "string" },
+    "issuing_state_province": { "type": "string" },
+
+    "fields": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "description": "Snake-case field name matching the linden-api model column where possible (e.g. number, expiration_date, state_province)"
+          },
+          "raw_value": {
+            "type": "string",
+            "description": "Verbatim text from the document"
+          },
+          "normalized_value": {
+            "type": "string",
+            "description": "Cleaned/normalized value. Dates → YYYY-MM-DD. Countries → ISO 3166-1 alpha-2. Booleans → 'true'/'false'."
+          },
+          "confidence": { "type": "number" },
+          "page": { "type": "integer" },
+          "missing": {
+            "type": "boolean",
+            "description": "true if this field should exist on the document but could not be read"
+          },
+          "ambiguous": {
+            "type": "boolean",
+            "description": "true if multiple readings were possible"
+          }
+        }
+      }
+    },
+
+    "detected_persons": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "role": {
+            "type": "string",
+            "description": "primary_holder | beneficiary | co_owner | executor | other"
+          },
+          "first_name": { "type": "string" },
+          "last_name": { "type": "string" },
+          "full_name": { "type": "string" },
+          "date_of_birth": { "type": "string" }
+        }
+      }
+    },
+
+    "matching_hints": {
+      "type": "object",
+      "properties": {
+        "primary_identifier": {
+          "type": "string",
+          "description": "The most reliable field for record matching (e.g. 'number', 'ssn', 'vin')"
+        },
+        "primary_identifier_value": { "type": "string" },
+        "secondary_identifiers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "field": { "type": "string" },
+              "value": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+
+    "issues": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "severity": { "type": "string", "description": "error | warning | info" },
+          "code": { "type": "string" },
+          "message": { "type": "string" },
+          "field": { "type": "string" }
+        }
+      }
+    },
+
+    "suggested_actions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "description": "create_record | update_record | confirm_fields | link_to_person | manual_review"
+          },
+          "reason": { "type": "string" },
+          "priority": { "type": "string", "description": "high | medium | low" },
+          "affected_fields": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        }
+      }
+    }
+  }
+}

@@ -246,3 +246,19 @@ def test_list_embeds_system_prompt(client: TestClient, db: Session, existing_con
     match = next((i for i in items if i["slug"] == existing_config.slug), None)
     assert match is not None
     assert match["system_prompt"]["content"] == "List test prompt."
+
+
+def test_list_model_config_types(client: TestClient):
+    response = client.get("/model-configs/types")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert "items" in data
+    items = data["items"]
+    ids = [item["id"] for item in items]
+    assert set(ids) == {"chat", "summary", "generation", "scan"}
+    for item in items:
+        assert "name" in item
+        assert "description" in item
+        assert item["name"]
+        assert item["description"]

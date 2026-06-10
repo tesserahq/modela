@@ -1,0 +1,64 @@
+{
+  "document_type": "driver_license",
+  "document_category": "identity_document",
+  "confidence": 0.94,
+  "issuing_authority": "California DMV",
+  "issuing_country": "US",
+  "issuing_state_province": "CA",
+
+  "fields": [
+    { "key": "number",           "raw_value": "Y1234567",     "normalized_value": "Y1234567",   "confidence": 0.98 },
+    { "key": "expiration_date",  "raw_value": "03/15/2029",   "normalized_value": "2029-03-15", "confidence": 0.97 },
+    { "key": "state_province",   "raw_value": "CA",           "normalized_value": "CA",         "confidence": 0.99 },
+    { "key": "country",          "raw_value": "USA",          "normalized_value": "US",         "confidence": 0.99 },
+    { "key": "address_street",   "raw_value": "123 Main St",  "normalized_value": "123 Main St","confidence": 0.91 },
+    { "key": "address_city",     "raw_value": "Los Angeles",  "normalized_value": "Los Angeles","confidence": 0.96 },
+    { "key": "address_state",    "raw_value": "CA",           "normalized_value": "CA",         "confidence": 0.99 },
+    { "key": "address_zip",      "raw_value": "90001",        "normalized_value": "90001",      "confidence": 0.95 },
+    { "key": "address_country",  "raw_value": "USA",          "normalized_value": "US",         "confidence": 0.99 },
+    { "key": "additional_security", "raw_value": "FEDERAL LIMITS APPLY", "normalized_value": "true", "confidence": 0.88 }
+  ],
+
+  "detected_persons": [
+    {
+      "role": "primary_holder",
+      "first_name": "Jane",
+      "last_name": "Doe",
+      "full_name": "Jane A. Doe",
+      "date_of_birth": "1990-03-21"
+    }
+  ],
+
+  "matching_hints": {
+    "primary_identifier": "number",
+    "primary_identifier_value": "Y1234567",
+    "secondary_identifiers": [
+      { "field": "date_of_birth",  "value": "1990-03-21" },
+      { "field": "expiration_date","value": "2029-03-15" }
+    ]
+  },
+
+  "issues": [
+    {
+      "severity": "warning",
+      "code": "low_confidence",
+      "message": "address_street confidence is below 0.95 — confirm with user",
+      "field": "address_street"
+    }
+  ],
+
+  "suggested_actions": [
+    {
+      "action": "create_record",
+      "reason": "No existing DriversLicense record found for this person",
+      "priority": "high",
+      "affected_fields": ["number", "expiration_date", "state_province", "country"]
+    },
+    {
+      "action": "confirm_fields",
+      "reason": "One or more fields have confidence below 0.95",
+      "priority": "medium",
+      "affected_fields": ["address_street"]
+    }
+  ]
+}

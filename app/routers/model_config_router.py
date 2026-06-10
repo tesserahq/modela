@@ -1,7 +1,12 @@
+from typing import get_args
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, status
 from fastapi_pagination import Page
+from fastapi_pagination import paginate as paginate_sequence
+from fastapi_pagination.utils import disable_installed_extensions_check
+
+disable_installed_extensions_check()
 from fastapi_pagination.ext.sqlalchemy import paginate
 from sqlalchemy.orm import Session
 
@@ -23,6 +28,8 @@ from app.repositories.model_config_repository import ModelConfigRepository
 from app.routers.utils.dependencies import get_model_config_by_id
 from app.schemas.mcp_server import MCPServerRead
 from app.schemas.model_config import (
+    ConfigType,
+    ConfigTypeRead,
     MCPServerAttachRequest,
     ModelConfigCreate,
     ModelConfigUpdate,
@@ -56,6 +63,15 @@ def create_model_config(
 def list_model_configs(db: Session = Depends(get_db)):
     query = ModelConfigRepository(db).list_query()
     return paginate(db, query)
+
+
+@router.get(
+    "/types",
+    response_model=Page[ConfigTypeRead],
+    dependencies=[Depends(_rbac["read"]), Depends(get_current_user)],
+)
+def list_model_config_types():
+    return paginate_sequence([ConfigTypeRead.from_id(t) for t in get_args(ConfigType)])
 
 
 @router.get(
