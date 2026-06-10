@@ -9,7 +9,7 @@ from app.schemas.scan import ScanFileRequest, ScanResponse
 from tessera_sdk.server.dependencies.auth import get_current_user
 
 router = APIRouter(tags=["scan"])
-RBAC_RESOURCE = "completion"
+RBAC_RESOURCE = "scan"
 _rbac = build_rbac_dependencies(resource=RBAC_RESOURCE, project_resolver=infer_project)
 
 
