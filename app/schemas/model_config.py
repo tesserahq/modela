@@ -49,6 +49,7 @@ class ModelConfigCreate(ModelConfigBase):
 
 
 class ModelConfigUpdate(BaseModel):
+    slug: Optional[str] = Field(None, max_length=255)
     name: Optional[str] = Field(None, max_length=255)
     provider: Optional[str] = Field(None, max_length=100)
     model: Optional[str] = Field(None, max_length=255)
