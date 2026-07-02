@@ -22,6 +22,11 @@ celery_app.conf.update(
     result_serializer="json",
     timezone="UTC",
     enable_utc=True,
+    # Required for celery-exporter (listens to the Celery event bus on the
+    # broker) to see this worker's tasks at all — without these, task events
+    # are off by default and the exporter has nothing to report.
+    worker_send_task_events=True,
+    task_send_sent_event=True,
 )
 
 celery_app.autodiscover_tasks(["app.tasks"])  # ensure tasks are registered explicitly

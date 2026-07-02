@@ -25,6 +25,7 @@ def main():
         f"--concurrency={concurrency}",
         f"--queues={queues}",  # Always specify queues
         f"--hostname={nodename}",  # Unique node name to avoid duplicate warnings
+        "--events",  # Required for celery-exporter to see this worker's tasks
     ]
     celery_app.worker_main(argv)
 
