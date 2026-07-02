@@ -52,13 +52,26 @@ def _on_worker_process_init(sender, **kwargs):
     # Fires once per (post-fork) worker child process, unlike worker_init which
     # runs pre-fork in the parent — the OTLP gRPC exporter connection is not
     # fork-safe, so tracing must be set up here.
-    if not settings.otel_enabled:
-        return
-    from opentelemetry.instrumentation.celery import CeleryInstrumentor
-    from app.telemetry import setup_tracing
+    from app.infra.logging_config import get_logger
 
-    tracer_provider = setup_tracing()
-    CeleryInstrumentor().instrument(tracer_provider=tracer_provider)
+    logger = get_logger("celery_app")
+
+    if not settings.otel_enabled:
+        logger.info("OTel tracing disabled for worker (OTEL_ENABLED is not set)")
+        return
+    try:
+        from opentelemetry.instrumentation.celery import CeleryInstrumentor
+        from app.telemetry import setup_tracing
+
+        tracer_provider = setup_tracing()
+        CeleryInstrumentor().instrument(tracer_provider=tracer_provider)
+        logger.info(
+            "OTel tracing enabled for worker "
+            f"(endpoint={settings.otel_exporter_otlp_endpoint}, "
+            f"service={settings.otel_service_name})"
+        )
+    except Exception:
+        logger.exception("Failed to set up OTel tracing for worker")
 
 
 @worker_shutdown.connect

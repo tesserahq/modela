@@ -18,6 +18,13 @@ async def _run_async() -> None:
     settings = get_settings()
     if settings.otel_enabled:
         setup_tracing()
+        logger.info(
+            "OTel tracing enabled for NATS worker "
+            f"(endpoint={settings.otel_exporter_otlp_endpoint}, "
+            f"service={settings.otel_service_name})"
+        )
+    else:
+        logger.info("OTel tracing disabled for NATS worker (OTEL_ENABLED is not set)")
     logger.debug("Starting NATS worker...")
     logger.debug(f"NATS URL: {settings.nats_url}")
     logger.debug(f"NATS Enabled: {settings.nats_enabled}")
