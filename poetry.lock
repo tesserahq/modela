@@ -3306,6 +3306,26 @@ opentelemetry-util-http = "0.63b1"
 instruments = ["asgiref (>=3.0,<4.0)"]
 
 [[package]]
+name = "opentelemetry-instrumentation-celery"
+version = "0.63b1"
+description = "OpenTelemetry Celery Instrumentation"
+optional = false
+python-versions = ">=3.10"
+groups = ["main"]
+files = [
+    {file = "opentelemetry_instrumentation_celery-0.63b1-py3-none-any.whl", hash = "sha256:9e3888b3ed067196540ee1546155f69b757f0614dd1490930d86a5e021b28bd6"},
+    {file = "opentelemetry_instrumentation_celery-0.63b1.tar.gz", hash = "sha256:90d45267e7ad43fdc8643ec5f17f8f310adc301e2e075774efba18222ee7bad3"},
+]
+
+[package.dependencies]
+opentelemetry-api = ">=1.12,<2.0"
+opentelemetry-instrumentation = "0.63b1"
+opentelemetry-semantic-conventions = "0.63b1"
+
+[package.extras]
+instruments = ["celery (>=4.0,<6.0)"]
+
+[[package]]
 name = "opentelemetry-instrumentation-fastapi"
 version = "0.63b1"
 description = "OpenTelemetry FastAPI Instrumentation"
@@ -6170,4 +6190,4 @@ propcache = ">=0.2.1"
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.14,<3.15"
-content-hash = "d22cf94028a1b8ba26cd6f1992dd2917571f8dc2352289848c6156d66d9ea243"
+content-hash = "f4b3437db383f3c51dc2038b930d5ef87701473e091cecef78876cf442e6b24a"

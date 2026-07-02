@@ -64,6 +64,7 @@ pydantic-ai = {extras = ["openai"], version = "^1.89.1"}
 fastmcp = "^3.3.1"
 fastmcp-slim = {extras = ["client"], version = "^3.3.1"}
 prometheus-fastapi-instrumentator = "^8.0.2"
+opentelemetry-instrumentation-celery = "0.63b1"
 
 [tool.poetry.dependencies.uvicorn]
 extras = [ "standard" ]

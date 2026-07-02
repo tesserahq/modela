@@ -3,6 +3,7 @@ import sys
 from app.config import get_settings
 from app.infra.logging_config import LoggingConfig, get_logger
 from app.tasks.process_nats_event import process_nats_event_task
+from app.telemetry import setup_tracing
 from faststream import FastStream
 from faststream.nats import NatsBroker, JStream
 from nats.js.api import DeliverPolicy
@@ -15,6 +16,8 @@ logger = get_logger("nats_worker")
 async def _run_async() -> None:
     """Async function that runs the FastStream application."""
     settings = get_settings()
+    if settings.otel_enabled:
+        setup_tracing()
     logger.debug("Starting NATS worker...")
     logger.debug(f"NATS URL: {settings.nats_url}")
     logger.debug(f"NATS Enabled: {settings.nats_enabled}")

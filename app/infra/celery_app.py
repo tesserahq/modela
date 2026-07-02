@@ -29,7 +29,11 @@ celery_app.autodiscover_tasks(["app.tasks"])  # ensure tasks are registered expl
 
 _update_prices = None
 
-from celery.signals import worker_init, worker_shutdown  # noqa: E402
+from celery.signals import (  # noqa: E402
+    worker_init,
+    worker_process_init,
+    worker_shutdown,
+)
 
 
 @worker_init.connect
@@ -41,6 +45,20 @@ def _on_worker_init(sender, **kwargs):
 
     _update_prices = UpdatePrices()
     _update_prices.start()
+
+
+@worker_process_init.connect
+def _on_worker_process_init(sender, **kwargs):
+    # Fires once per (post-fork) worker child process, unlike worker_init which
+    # runs pre-fork in the parent — the OTLP gRPC exporter connection is not
+    # fork-safe, so tracing must be set up here.
+    if not settings.otel_enabled:
+        return
+    from opentelemetry.instrumentation.celery import CeleryInstrumentor
+    from app.telemetry import setup_tracing
+
+    tracer_provider = setup_tracing()
+    CeleryInstrumentor().instrument(tracer_provider=tracer_provider)
 
 
 @worker_shutdown.connect
