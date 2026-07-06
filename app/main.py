@@ -16,7 +16,6 @@ from app.db import db_manager
 from tessera_sdk.server.dependencies.auth import get_current_user
 from fastapi.openapi.utils import get_openapi
 from app.models.user import User
-from prometheus_fastapi_instrumentator import Instrumentator
 
 SKIP_AUTH_PATHS = ["/livez", "/readyz", "/metrics"]
 
