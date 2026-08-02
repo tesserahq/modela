@@ -2,6 +2,8 @@ import time
 from contextlib import asynccontextmanager
 from typing import AsyncIterator, Optional
 from uuid import UUID
+
+from opentelemetry import trace
 from pydantic_ai.models import Model, ModelRequestParameters, StreamedResponse
 from pydantic_ai.messages import ModelMessage, ModelResponse
 from pydantic_ai.settings import ModelSettings
@@ -9,8 +11,11 @@ from app.inference.adapters.parameter_validation import (
     clamp_model_config_parameter,
     resolve_provider_settings,
 )
+from app.infra.telemetry import safe_instrument_span
 from app.models.model_config import ModelConfig
 from app.tasks.log_completion_usage import log_completion_usage
+
+tracer = trace.get_tracer(__name__)
 
 
 class ModelaModel(Model):
@@ -33,6 +38,21 @@ class ModelaModel(Model):
         self._project_id = project_id
         self._request_id = request_id
         self._user_id = user_id
+        self._request_attempt = 0
+
+    def _next_request_attempt(self) -> int:
+        self._request_attempt += 1
+        return self._request_attempt
+
+    def _span_attributes(self, attempt: int, *, streamed: bool) -> dict[str, object]:
+        return {
+            "gen_ai.operation.name": "chat",
+            "gen_ai.provider.name": self._model_config.provider,
+            "gen_ai.request.model": self._model_config.model,
+            "modela.model_config.slug": self._model_config.slug,
+            "modela.request.attempt": attempt,
+            "modela.request.streamed": streamed,
+        }
 
     @property
     def model_name(self) -> str:
@@ -56,11 +76,24 @@ class ModelaModel(Model):
         model_request_parameters: ModelRequestParameters,
     ) -> ModelResponse:
         effective_settings = _apply_config_params(self._model_config, model_settings)
-        start = time.monotonic()
-        response = await self._inner.request(
-            messages, effective_settings, model_request_parameters
-        )
-        latency_ms = int((time.monotonic() - start) * 1000)
+        attempt = self._next_request_attempt()
+        with safe_instrument_span(
+            tracer,
+            "inference.model.request",
+            attributes=self._span_attributes(attempt, streamed=False),
+        ) as span:
+            start = time.monotonic()
+            response = await self._inner.request(
+                messages, effective_settings, model_request_parameters
+            )
+            latency_ms = int((time.monotonic() - start) * 1000)
+            span.set_attribute(
+                "gen_ai.usage.input_tokens", response.usage.input_tokens or 0
+            )
+            span.set_attribute(
+                "gen_ai.usage.output_tokens", response.usage.output_tokens or 0
+            )
+            span.set_attribute("modela.provider.latency_ms", latency_ms)
 
         log_completion_usage.delay(
             request_id=self._request_id,
@@ -86,12 +119,28 @@ class ModelaModel(Model):
         run_context=None,
     ) -> AsyncIterator[StreamedResponse]:
         effective_settings = _apply_config_params(self._model_config, model_settings)
-        start = time.monotonic()
-        async with self._inner.request_stream(
-            messages, effective_settings, model_request_parameters, run_context
-        ) as stream:
-            yield stream
-        latency_ms = int((time.monotonic() - start) * 1000)
+        attempt = self._next_request_attempt()
+        with safe_instrument_span(
+            tracer,
+            "inference.model.request",
+            attributes=self._span_attributes(attempt, streamed=True),
+        ) as span:
+            start = time.monotonic()
+            async with self._inner.request_stream(
+                messages,
+                effective_settings,
+                model_request_parameters,
+                run_context,
+            ) as stream:
+                yield stream
+            latency_ms = int((time.monotonic() - start) * 1000)
+            span.set_attribute(
+                "gen_ai.usage.input_tokens", stream._usage.input_tokens or 0
+            )
+            span.set_attribute(
+                "gen_ai.usage.output_tokens", stream._usage.output_tokens or 0
+            )
+            span.set_attribute("modela.provider.latency_ms", latency_ms)
         log_completion_usage.delay(
             request_id=self._request_id,
             project_id=self._project_id,

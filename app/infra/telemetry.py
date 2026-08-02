@@ -1,5 +1,7 @@
+from contextlib import contextmanager
 from functools import wraps
 from opentelemetry import trace
+from opentelemetry.trace import Status, StatusCode, Tracer
 from typing import Any, Callable, TypeVar, cast
 
 T = TypeVar("T")
@@ -45,3 +47,26 @@ def instrument_span(span_name: str):
     """
     tracer = trace.get_tracer(__name__)
     return tracer.start_as_current_span(span_name)
+
+
+@contextmanager
+def safe_instrument_span(
+    tracer: Tracer,
+    span_name: str,
+    *,
+    attributes: dict[str, object] | None = None,
+):
+    """Create a span that records error types without sensitive exception text."""
+    with tracer.start_as_current_span(
+        span_name,
+        attributes=attributes,
+        record_exception=False,
+        set_status_on_exception=False,
+    ) as span:
+        try:
+            yield span
+        except Exception as exc:
+            error_type = type(exc).__name__
+            span.set_attribute("error.type", error_type)
+            span.set_status(Status(StatusCode.ERROR, error_type))
+            raise
