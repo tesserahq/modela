@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from typing import Any, AsyncIterator
 
+from opentelemetry import trace
 from pydantic_ai import Agent
 from pydantic_ai.exceptions import UnexpectedModelBehavior
 from pydantic_ai.messages import ModelMessage, ModelRequest, SystemPromptPart
@@ -10,7 +11,10 @@ from app.exceptions.provider_errors import ProviderError
 from app.exceptions.structured_output_validation_error import (
     StructuredOutputValidationError,
 )
+from app.infra.telemetry import safe_instrument_span
 from app.inference.model import ModelaModel
+
+tracer = trace.get_tracer(__name__)
 
 
 @dataclass
@@ -55,16 +59,27 @@ class AgentRunner:
         if max_result_retries is not None:
             run_kwargs["output_retries"] = max_result_retries
 
-        try:
-            result = await agent.run(user_prompt, **run_kwargs)
-        except UnexpectedModelBehavior as e:
-            if output_type is not None:
-                raise StructuredOutputValidationError(
-                    "Provider response did not conform to the requested schema.",
-                    validation_errors=[{"message": str(e)}],
-                    raw_content=str(e),
-                )
-            raise ProviderError(str(e)) from e
+        span_attributes: dict[str, object] = {
+            "modela.inference.structured_output": output_type is not None,
+            "modela.inference.message_history.count": len(history),
+            "modela.inference.toolset.count": len(toolsets or []),
+        }
+        if max_result_retries is not None:
+            span_attributes["modela.inference.max_result_retries"] = max_result_retries
+
+        with safe_instrument_span(
+            tracer, "inference.agent.run", attributes=span_attributes
+        ):
+            try:
+                result = await agent.run(user_prompt, **run_kwargs)
+            except UnexpectedModelBehavior as e:
+                if output_type is not None:
+                    raise StructuredOutputValidationError(
+                        "Provider response did not conform to the requested schema.",
+                        validation_errors=[{"message": str(e)}],
+                        raw_content=str(e),
+                    )
+                raise ProviderError(str(e)) from e
 
         usage = result.usage()
         return AgentResult(
@@ -100,6 +115,17 @@ class AgentRunner:
         if max_result_retries is not None:
             run_kwargs["output_retries"] = max_result_retries
 
-        async with agent.run_stream(user_prompt, **run_kwargs) as result:
-            async for delta in result.stream_text(delta=True):
-                yield delta
+        span_attributes: dict[str, object] = {
+            "modela.inference.structured_output": False,
+            "modela.inference.message_history.count": len(history),
+            "modela.inference.toolset.count": len(toolsets or []),
+        }
+        if max_result_retries is not None:
+            span_attributes["modela.inference.max_result_retries"] = max_result_retries
+
+        with safe_instrument_span(
+            tracer, "inference.agent.run", attributes=span_attributes
+        ):
+            async with agent.run_stream(user_prompt, **run_kwargs) as result:
+                async for delta in result.stream_text(delta=True):
+                    yield delta
