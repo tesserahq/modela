@@ -134,12 +134,9 @@ class ModelaModel(Model):
             ) as stream:
                 yield stream
             latency_ms = int((time.monotonic() - start) * 1000)
-            span.set_attribute(
-                "gen_ai.usage.input_tokens", stream._usage.input_tokens or 0
-            )
-            span.set_attribute(
-                "gen_ai.usage.output_tokens", stream._usage.output_tokens or 0
-            )
+            usage = stream.usage()
+            span.set_attribute("gen_ai.usage.input_tokens", usage.input_tokens or 0)
+            span.set_attribute("gen_ai.usage.output_tokens", usage.output_tokens or 0)
             span.set_attribute("modela.provider.latency_ms", latency_ms)
         log_completion_usage.delay(
             request_id=self._request_id,
@@ -147,8 +144,8 @@ class ModelaModel(Model):
             model_config_slug=self._model_config.slug,
             provider=self._model_config.provider,
             model=self._model_config.model,
-            input_tokens=stream._usage.input_tokens or 0,
-            output_tokens=stream._usage.output_tokens or 0,
+            input_tokens=usage.input_tokens or 0,
+            output_tokens=usage.output_tokens or 0,
             finish_reason=None,
             latency_ms=latency_ms,
             created_by_id=str(self._user_id) if self._user_id else None,
