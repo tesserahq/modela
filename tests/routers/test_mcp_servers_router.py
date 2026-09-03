@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.repositories.mcp_server_repository import MCPServerRepository
 from app.schemas.mcp_server import MCPServerCreate, MCPToolsRefreshResponse
+from app.schemas.mcp_tool import MCPCatalogTool
 from app.models.credential import Credential
 from app.constants.credentials import CredentialType
 from app.services.credentials import encrypt_credential_fields
@@ -148,6 +149,27 @@ def test_list_embeds_credential(client: TestClient, db: Session, existing_mcp_se
     )
     assert match is not None
     assert match["credential"]["name"] == "list-embed-cred"
+
+
+def test_list_mcp_server_tools(client: TestClient, existing_mcp_server):
+    tool = MCPCatalogTool(
+        qualified_name=f"{existing_mcp_server.tool_prefix}__do_thing",
+        original_name="do_thing",
+        description="Does a thing",
+        input_schema={"type": "object"},
+        server_id=existing_mcp_server.server_id,
+    )
+    with patch(
+        "app.routers.mcp_servers_router.ToolCatalog.get_tools",
+        new_callable=AsyncMock,
+        return_value=[tool],
+    ):
+        r = client.get(f"/mcp-servers/{existing_mcp_server.id}/tools")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["server_id"] == existing_mcp_server.server_id
+    assert len(body["tools"]) == 1
+    assert body["tools"][0]["qualified_name"] == tool.qualified_name
 
 
 def test_refresh_mcp_server_tools(client: TestClient, existing_mcp_server):
