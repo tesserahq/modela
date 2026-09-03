@@ -9,6 +9,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from app.schemas.credential import CredentialCompact
+from app.schemas.mcp_tool import MCPCatalogTool
 
 
 class MCPServerBase(BaseModel):
@@ -117,3 +118,10 @@ class MCPToolsRefreshResponse(BaseModel):
 
     server_id: str
     tools_count: int
+
+
+class MCPToolsListResponse(BaseModel):
+    """Response schema for GET /mcp-servers/{id}/tools."""
+
+    server_id: str
+    tools: list[MCPCatalogTool]

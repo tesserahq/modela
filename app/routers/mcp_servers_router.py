@@ -22,9 +22,12 @@ from app.schemas.mcp_server import (
     MCPServerCreate,
     MCPServerRead,
     MCPServerUpdate,
+    MCPToolsListResponse,
     MCPToolsRefreshResponse,
 )
 from app.repositories.mcp_server_repository import MCPServerRepository
+from app.services.credential_applier import CredentialApplier
+from app.services.mcp.catalog import ToolCatalog
 from tessera_sdk.server.dependencies.auth import get_current_user  # type: ignore[import-untyped]
 
 router = APIRouter(
@@ -100,6 +103,30 @@ def update_mcp_server(
     )
 
     return updated
+
+
+@router.get(
+    "/{id}/tools",
+    response_model=MCPToolsListResponse,
+)
+async def list_mcp_server_tools(
+    mcp_server: MCPServer = Depends(get_mcp_server_by_id),
+    _authorized: bool = Depends(rbac["read"]),
+    _current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> MCPToolsListResponse:
+    """List the tool catalog for this MCP server (cached, unless expired)."""
+    credential_svc = CredentialApplier(db)
+    headers = credential_svc.apply_for_user(
+        cast(Optional[UUID], mcp_server.credential_id),
+        user_id=getattr(_current_user, "id", None),
+    )
+    catalog = ToolCatalog.new()
+    tools = await catalog.get_tools(mcp_server, headers)
+    return MCPToolsListResponse(
+        server_id=cast(str, mcp_server.server_id),
+        tools=tools,
+    )
 
 
 @router.post(
