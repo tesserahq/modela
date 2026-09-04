@@ -217,3 +217,28 @@ def test_two_default_embedding_configs_violate_db_constraint(db: Session):
             )
         )
         db.flush()
+
+
+# --- enabled_tools validation ---
+
+
+def test_create_with_valid_enabled_tools_succeeds(db: Session, create_payload):
+    payload = create_payload.model_copy(
+        update={"slug": "with-tools", "enabled_tools": ["search_knowledge_base"]}
+    )
+    result = CreateModelConfigCommand(db).execute(payload)
+    assert result.enabled_tools == ["search_knowledge_base"]
+
+
+def test_create_with_unknown_tool_name_rejected(db: Session, create_payload):
+    payload = create_payload.model_copy(
+        update={"slug": "bad-tools", "enabled_tools": ["not_a_real_tool"]}
+    )
+    with pytest.raises(InvalidParameterError):
+        CreateModelConfigCommand(db).execute(payload)
+
+
+def test_update_with_unknown_tool_name_rejected(db: Session, existing_config):
+    payload = ModelConfigUpdate(enabled_tools=["not_a_real_tool"])
+    with pytest.raises(InvalidParameterError):
+        UpdateModelConfigCommand(db).execute(existing_config, payload)
