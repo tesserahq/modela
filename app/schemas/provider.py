@@ -1,4 +1,5 @@
 from datetime import datetime
+from decimal import Decimal
 
 from pydantic import BaseModel
 
@@ -27,6 +28,11 @@ class ProviderModelSchema(BaseModel):
     id: str
     name: str
     description: str | None = None
+    # Real $/million-token rates from genai_prices, populated at request time.
+    # Null when the model isn't in genai_prices' dataset yet (e.g. a very
+    # recently released id).
+    input_price_per_mtok: Decimal | None = None
+    output_price_per_mtok: Decimal | None = None
 
 
 class ProviderSchema(BaseModel):
