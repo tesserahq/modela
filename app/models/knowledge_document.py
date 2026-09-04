@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import uuid
 
-from sqlalchemy import Column, String, Text
+from sqlalchemy import Column, String, Text, func, select
 from sqlalchemy.dialects.postgresql import JSONB, UUID
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import column_property, relationship
 
 from app.db import Base
+from app.models.knowledge_chunk import KnowledgeChunk
 from app.models.mixins import TimestampMixin
 
 
@@ -30,4 +31,14 @@ class KnowledgeDocument(Base, TimestampMixin):
         back_populates="document",
         cascade="all, delete-orphan",
         passive_deletes=True,
+    )
+
+    # Read-only, computed via a correlated subquery on every load — not a stored
+    # column, so no migration and no separate count query per row (works for
+    # both get_by_id and the paginated list_query()).
+    chunk_count = column_property(
+        select(func.count(KnowledgeChunk.id))
+        .where(KnowledgeChunk.document_id == id)
+        .correlate_except(KnowledgeChunk)
+        .scalar_subquery()
     )

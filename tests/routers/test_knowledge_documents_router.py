@@ -1,10 +1,13 @@
 """Router tests for /knowledge-documents."""
 
 from unittest.mock import patch
+from uuid import uuid4
 
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
+from app.models.knowledge_chunk import KnowledgeChunk
+from app.models.model_config import ModelConfig
 from app.repositories.knowledge_document_repository import KnowledgeDocumentRepository
 
 
@@ -94,6 +97,46 @@ def test_get_and_list_knowledge_document(mock_task, client: TestClient):
 def test_get_knowledge_document_not_found(client: TestClient):
     r = client.get("/knowledge-documents/00000000-0000-0000-0000-000000000000")
     assert r.status_code == 404
+
+
+@patch(
+    "app.commands.knowledge_documents.create_knowledge_document_command.index_knowledge_document_task"
+)
+def test_chunk_count_reflects_actual_chunk_rows(
+    mock_task, client: TestClient, db: Session
+):
+    created = client.post("/knowledge-documents", json=_create_payload()).json()
+    assert created["chunk_count"] == 0
+
+    embedding_config = ModelConfig(
+        slug=f"embed-{uuid4().hex[:8]}",
+        name="Embedding Config",
+        provider="openai",
+        model="text-embedding-3-small",
+        config_type="embedding",
+        params={"chunk_size": 300, "chunk_overlap": 0, "strategy": "fixed_size"},
+    )
+    db.add(embedding_config)
+    db.commit()
+    for i in range(3):
+        db.add(
+            KnowledgeChunk(
+                document_id=created["id"],
+                chunk_index=i,
+                content=f"chunk {i}",
+                embedding=[0.1, 0.2],
+                embedding_config_id=embedding_config.id,
+                chunk_params={},
+            )
+        )
+    db.commit()
+
+    detail = client.get(f"/knowledge-documents/{created['id']}").json()
+    assert detail["chunk_count"] == 3
+
+    listed = client.get("/knowledge-documents").json()
+    item = next(item for item in listed["items"] if item["id"] == created["id"])
+    assert item["chunk_count"] == 3
 
 
 @patch(

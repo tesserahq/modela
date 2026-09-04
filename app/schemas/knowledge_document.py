@@ -38,5 +38,6 @@ class KnowledgeDocumentRead(BaseModel):
     title: str
     content: str
     metadata: dict[str, Any] | None = Field(None, validation_alias="extended_info")
+    chunk_count: int
     created_at: datetime
     updated_at: datetime
