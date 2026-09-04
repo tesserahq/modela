@@ -4,8 +4,13 @@ from tessera_sdk.server.dependencies.auth import get_current_user
 from app.auth.rbac import build_rbac_dependencies
 from app.inference.adapters.base import BaseProviderAdapter
 from app.inference.adapters.registry import PROVIDER_REGISTRY
-from app.schemas.provider import ProviderModelSchema, ProviderSchema
+from app.schemas.provider import (
+    ProviderCatalogCheckResponse,
+    ProviderModelSchema,
+    ProviderSchema,
+)
 from app.services.pricing import get_model_pricing
+from app.tasks.check_provider_model_catalog import check_provider_model_catalog_task
 
 router = APIRouter(
     prefix="/providers",
@@ -52,3 +57,17 @@ def list_providers(
         )
         for adapter in PROVIDER_REGISTRY.values()
     ]
+
+
+@router.post(
+    "/check-catalog",
+    response_model=ProviderCatalogCheckResponse,
+    status_code=202,
+)
+def check_provider_catalog(
+    _authorized: bool = Depends(rbac["update"]),
+    _current_user=Depends(get_current_user),
+) -> ProviderCatalogCheckResponse:
+    """Manually trigger the provider model catalog drift check (normally weekly)."""
+    result = check_provider_model_catalog_task.delay()
+    return ProviderCatalogCheckResponse(task_id=result.id)
