@@ -5,6 +5,7 @@ from app.exceptions.conflict_error import ConflictError
 from app.inference.adapters.parameter_validation import validate_model_config_parameters
 from app.models.model_config import ModelConfig
 from app.repositories.model_config_repository import ModelConfigRepository
+from app.schemas.embedding_config_params import validate_embedding_config_params
 from app.schemas.model_config import ModelConfigUpdate, ModelConfigResponse
 
 
@@ -23,6 +24,10 @@ class UpdateModelConfigCommand:
             temperature=updates.get("temperature", record.temperature),
             max_tokens=updates.get("max_tokens", record.max_tokens),
             top_p=updates.get("top_p", record.top_p),
+        )
+        validate_embedding_config_params(
+            updates.get("config_type", record.config_type),
+            updates.get("params", record.params),
         )
         try:
             updated = self.model_config_repository.update(

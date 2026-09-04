@@ -4,13 +4,20 @@ from uuid import UUID
 from datetime import datetime
 from app.schemas.system_prompt import SystemPromptCompact
 
-ConfigType = Literal["chat", "summary", "generation", "scan"]
+ConfigType = Literal["chat", "summary", "generation", "scan", "embedding"]
 
 _CONFIG_TYPE_META: dict[str, tuple[str, str]] = {
     "chat": ("Chat", "General-purpose conversational completions."),
     "summary": ("Summary", "Summarizes documents or text content into concise output."),
     "generation": ("Generation", "Generates text or structured content from a prompt."),
     "scan": ("Scan", "Extracts structured data from uploaded documents or images."),
+    "embedding": (
+        "Embedding",
+        "Produces vector embeddings for the knowledge base. Warning: changing the "
+        "provider or model on an embedding config that already produced chunk "
+        "embeddings invalidates them (dimension/provenance mismatch) — create a new "
+        "embedding config instead of mutating one already in use.",
+    ),
 }
 
 
@@ -39,6 +46,7 @@ class ModelConfigBase(BaseModel):
     max_tokens: Optional[int] = Field(None, gt=0)
     top_p: Optional[float] = Field(None, ge=0.0, le=1.0)
     output_schema: Optional[dict[str, Any]] = None
+    params: Optional[dict[str, Any]] = None
     config_type: ConfigType = "chat"
     is_default: bool = False
     max_tool_rounds: Optional[int] = Field(None, ge=1, le=50)
@@ -58,6 +66,7 @@ class ModelConfigUpdate(BaseModel):
     max_tokens: Optional[int] = Field(None, gt=0)
     top_p: Optional[float] = Field(None, ge=0.0, le=1.0)
     output_schema: Optional[dict[str, Any]] = None
+    params: Optional[dict[str, Any]] = None
     config_type: Optional[ConfigType] = None
     is_default: Optional[bool] = None
     max_tool_rounds: Optional[int] = Field(None, ge=1, le=50)

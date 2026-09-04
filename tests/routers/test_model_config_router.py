@@ -256,7 +256,7 @@ def test_list_model_config_types(client: TestClient):
     assert "items" in data
     items = data["items"]
     ids = [item["id"] for item in items]
-    assert set(ids) == {"chat", "summary", "generation", "scan"}
+    assert set(ids) == {"chat", "summary", "generation", "scan", "embedding"}
     for item in items:
         assert "name" in item
         assert "description" in item

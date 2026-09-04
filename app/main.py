@@ -99,6 +99,9 @@ def create_app(testing: bool = False, auth_middleware=None) -> FastAPI:
     from app.routers.scan_router import router as scan_router
     from app.routers.analytics_router import router as analytics_router
     from app.routers.providers_router import router as providers_router
+    from app.routers.knowledge_documents_router import (
+        router as knowledge_documents_router,
+    )
 
     app.include_router(model_config_router)
     app.include_router(completion_request_router)
@@ -110,6 +113,7 @@ def create_app(testing: bool = False, auth_middleware=None) -> FastAPI:
     app.include_router(scan_router)
     app.include_router(analytics_router)
     app.include_router(providers_router)
+    app.include_router(knowledge_documents_router)
 
     register_exception_handlers(app)
 

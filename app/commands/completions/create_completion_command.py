@@ -139,10 +139,16 @@ class CreateCompletionCommand:
             config = self.repo.get_by_slug(model_slug)
             if config is None:
                 raise ResourceNotFoundError(f"ModelConfig '{model_slug}' not found")
+            if config.config_type != "chat":
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"ModelConfig '{model_slug}' is not a chat config "
+                    f"(config_type='{config.config_type}')",
+                )
             return config
-        config = self.repo.get_default()
+        config = self.repo.get_default_for_type("chat")
         if config is None:
-            raise ResourceNotFoundError("No default ModelConfig is configured")
+            raise ResourceNotFoundError("No default chat ModelConfig is configured")
         return config
 
 

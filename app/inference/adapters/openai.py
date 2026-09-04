@@ -1,6 +1,7 @@
 from datetime import UTC, datetime
 
 import httpx
+from openai import OpenAI
 from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openai import OpenAIProvider
 
@@ -50,6 +51,16 @@ class OpenAIProviderAdapter(BaseProviderAdapter):
             model_name,
             provider=OpenAIProvider(api_key=key),
         )
+
+    def create_embeddings(
+        self, model_name: str, texts: list[str], api_key: str | None = None
+    ) -> list[list[float]]:
+        key = api_key if api_key is not None else get_settings().openai_api_key
+        if not key:
+            raise ValueError("OPENAI_API_KEY is not configured")
+        client = OpenAI(api_key=key)
+        response = client.embeddings.create(model=model_name, input=texts)
+        return [item.embedding for item in response.data]
 
     def list_models(self) -> list[ProviderModelSchema]:
         return self._models

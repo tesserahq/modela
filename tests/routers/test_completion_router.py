@@ -127,6 +127,58 @@ def test_completion_no_model_no_default(client: TestClient):
     assert response.status_code == 404
 
 
+def test_completion_uses_default_chat_config_not_embedding_default(
+    client: TestClient, db: Session, default_config
+):
+    """Regression test for PRD 0019: no-model completion must resolve the
+    default 'chat' config specifically, not whichever config_type happens to
+    be default (get_default() was unscoped by config_type)."""
+    ModelConfigRepository(db).create(
+        {
+            "slug": "default-embedding",
+            "name": "Default Embedding",
+            "provider": "openai",
+            "model": "text-embedding-3-small",
+            "config_type": "embedding",
+            "params": {"chunk_size": 500, "chunk_overlap": 0, "strategy": "fixed_size"},
+            "is_default": True,
+        }
+    )
+
+    response = client.post(
+        "/chat/completions",
+        json={"messages": [{"role": "user", "content": "Hello"}]},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["model"] == default_config.slug
+
+
+def test_completion_rejects_explicit_embedding_typed_slug(
+    client: TestClient, db: Session
+):
+    ModelConfigRepository(db).create(
+        {
+            "slug": "embedding-config",
+            "name": "Embedding Config",
+            "provider": "openai",
+            "model": "text-embedding-3-small",
+            "config_type": "embedding",
+            "params": {"chunk_size": 500, "chunk_overlap": 0, "strategy": "fixed_size"},
+        }
+    )
+
+    response = client.post(
+        "/chat/completions",
+        json={
+            "model": "embedding-config",
+            "messages": [{"role": "user", "content": "Hello"}],
+        },
+    )
+
+    assert response.status_code == 422
+
+
 def test_completion_with_system_prompt(client: TestClient, config_with_system_prompt):
     response = client.post(
         "/chat/completions",

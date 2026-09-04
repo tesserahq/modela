@@ -7,8 +7,10 @@ from app.models.mcp_server import MCPServer
 
 from app.db import get_db
 from app.models.completion_request import CompletionRequest
+from app.models.knowledge_document import KnowledgeDocument
 from app.models.model_config import ModelConfig
 from app.repositories.completion_request_repository import CompletionRequestRepository
+from app.repositories.knowledge_document_repository import KnowledgeDocumentRepository
 from app.repositories.mcp_server_repository import MCPServerRepository
 from app.repositories.model_config_repository import ModelConfigRepository
 from app.exceptions.resource_not_found_error import ResourceNotFoundError
@@ -22,6 +24,16 @@ def get_model_config_by_id(
     if model_config is None:
         raise ResourceNotFoundError(f"ModelConfig '{id}' not found")
     return model_config
+
+
+def get_knowledge_document_by_id(
+    id: UUID,
+    db: Session = Depends(get_db),
+) -> KnowledgeDocument:
+    document = KnowledgeDocumentRepository(db).get_by_id(id)
+    if document is None:
+        raise ResourceNotFoundError(f"KnowledgeDocument '{id}' not found")
+    return document
 
 
 def get_completion_request_by_id(
