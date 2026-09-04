@@ -1,15 +1,11 @@
 # Import celery app first
 from app.infra.celery_app import celery_app
-from app.tasks.log_completion_usage import log_completion_usage
-
-try:
-    from app.tasks.process_nats_event import process_nats_event_task
-except ImportError:
-    process_nats_event_task = None  # type: ignore[assignment]
 
 # Initialize logging configuration for Celery workers
 from app.infra.logging_config import LoggingConfig
+from app.tasks.check_provider_model_catalog import check_provider_model_catalog_task
+from app.tasks.log_completion_usage import log_completion_usage
 
 LoggingConfig()  # Initialize logging
 
-__all__ = ["celery_app", "log_completion_usage", "process_nats_event_task"]
+__all__ = ["celery_app", "check_provider_model_catalog_task", "log_completion_usage"]
