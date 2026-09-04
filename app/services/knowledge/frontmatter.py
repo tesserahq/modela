@@ -8,6 +8,8 @@ is ever chunked/embedded — frontmatter is stored as structured metadata.
 """
 
 import re
+from datetime import date, datetime
+from typing import Any
 
 import yaml
 
@@ -18,6 +20,23 @@ from app.exceptions.invalid_parameter_error import InvalidParameterError
 # `---`. A naive str.split("---") would also match a markdown horizontal rule
 # appearing later in the body.
 _FRONTMATTER_RE = re.compile(r"\A---\n(.*?)\n---\n?(.*)\Z", re.DOTALL)
+
+
+def _to_json_compatible(value: Any) -> Any:
+    """Normalize safe YAML values to primitives accepted by JSONB."""
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    if isinstance(value, (date, datetime)):
+        return value.isoformat()
+    if isinstance(value, list):
+        return [_to_json_compatible(item) for item in value]
+    if isinstance(value, dict):
+        if not all(isinstance(key, str) for key in value):
+            raise InvalidParameterError("YAML frontmatter keys must be strings")
+        return {key: _to_json_compatible(item) for key, item in value.items()}
+    raise InvalidParameterError(
+        f"YAML frontmatter contains unsupported value type: {type(value).__name__}"
+    )
 
 
 def split_frontmatter(raw: str) -> tuple[dict, str]:
@@ -49,4 +68,4 @@ def split_frontmatter(raw: str) -> tuple[dict, str]:
             "YAML frontmatter must parse to a mapping (key: value pairs)"
         )
 
-    return metadata, body
+    return _to_json_compatible(metadata), body

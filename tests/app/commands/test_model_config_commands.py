@@ -1,4 +1,5 @@
 import pytest
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.commands.model_configs.create_model_config_command import (
@@ -11,6 +12,7 @@ from app.commands.model_configs.update_model_config_command import (
     UpdateModelConfigCommand,
 )
 from app.exceptions.invalid_parameter_error import InvalidParameterError
+from app.models.model_config import ModelConfig
 from app.repositories.model_config_repository import ModelConfigRepository
 from app.schemas.model_config import (
     ModelConfigCreate,
@@ -115,6 +117,8 @@ def test_update_partial_fields_unchanged(db: Session, existing_config):
 def test_delete_soft_deletes_record(db: Session, existing_config):
     DeleteModelConfigCommand(db).execute(existing_config)
 
+    assert ModelConfigRepository(db).get_by_id(existing_config.id) is None
+
 
 # --- embedding config_type params validation ---
 
@@ -191,29 +195,25 @@ def test_two_default_embedding_configs_violate_db_constraint(db: Session):
     sequential requests fine (each clear happens before the next insert), so
     this exercises the DB-level partial unique index directly — the scenario
     a real race between two concurrent requests could produce."""
-    from sqlalchemy.exc import IntegrityError
-
-    from app.models.model_config import ModelConfig
-
-    db.add(
-        ModelConfig(
-            slug="embed-a",
-            name="A",
-            provider="openai",
-            model="text-embedding-3-small",
-            config_type="embedding",
-            is_default=True,
+    with pytest.raises(IntegrityError), db.begin_nested():
+        db.add(
+            ModelConfig(
+                slug="embed-a",
+                name="A",
+                provider="openai",
+                model="text-embedding-3-small",
+                config_type="embedding",
+                is_default=True,
+            )
         )
-    )
-    db.add(
-        ModelConfig(
-            slug="embed-b",
-            name="B",
-            provider="openai",
-            model="text-embedding-3-small",
-            config_type="embedding",
-            is_default=True,
+        db.add(
+            ModelConfig(
+                slug="embed-b",
+                name="B",
+                provider="openai",
+                model="text-embedding-3-small",
+                config_type="embedding",
+                is_default=True,
+            )
         )
-    )
-    with pytest.raises(IntegrityError):
-        db.commit()
+        db.flush()

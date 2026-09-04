@@ -16,8 +16,8 @@ logger = get_logger("index_knowledge_document")
 @celery_app.task
 def index_knowledge_document_task(document_id: str) -> None:
     """Chunk and embed a knowledge document using the default embedding
-    ModelConfig. On a reindex (document was updated), existing chunks are
-    deleted first — no incremental diffing.
+    ModelConfig. On a reindex, replacement embeddings are generated before
+    existing chunks are replaced transactionally — no incremental diffing.
 
     Raises (rather than silently skipping) when no default embedding config
     exists, so the failure is visible in Celery monitoring/logs instead of
@@ -30,8 +30,6 @@ def index_knowledge_document_task(document_id: str) -> None:
         if document is None:
             # Deleted before the task ran; nothing to index.
             return
-
-        doc_repo.delete_chunks_for_document(document.id)
 
         embedding_config = ModelConfigRepository(db).get_default_for_type("embedding")
         if embedding_config is None:
@@ -47,12 +45,20 @@ def index_knowledge_document_task(document_id: str) -> None:
             chunk_overlap=params.chunk_overlap,
             strategy=params.strategy,
         )
-        if not chunks:
-            return
+        vectors: list[list[float]] = []
+        if chunks:
+            adapter = get_adapter(embedding_config.provider)
+            vectors = adapter.create_embeddings(embedding_config.model, chunks)
+            if len(vectors) != len(chunks):
+                raise RuntimeError(
+                    "Embedding provider returned "
+                    f"{len(vectors)} vectors for {len(chunks)} chunks"
+                )
 
-        adapter = get_adapter(embedding_config.provider)
-        vectors = adapter.create_embeddings(embedding_config.model, chunks)
-
+        # Preserve the currently usable index until configuration validation,
+        # chunking, and the external provider call have all succeeded. The
+        # deletion and replacement insert commit as one transaction below.
+        doc_repo.delete_chunks_for_document(document.id)
         chunk_params_snapshot = params.model_dump()
         for index, (text, vector) in enumerate(zip(chunks, vectors)):
             db.add(
@@ -66,10 +72,8 @@ def index_knowledge_document_task(document_id: str) -> None:
                 )
             )
         db.commit()
-    except Exception as exc:
-        logger.error(
-            f"Failed to index knowledge document {document_id}: {exc}", exc_info=True
-        )
+    except Exception:
+        logger.exception(f"Failed to index knowledge document {document_id}")
         db.rollback()
         raise
     finally:

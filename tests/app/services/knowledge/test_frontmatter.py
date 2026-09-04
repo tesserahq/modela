@@ -1,3 +1,5 @@
+import json
+
 import pytest
 
 from app.exceptions.invalid_parameter_error import InvalidParameterError
@@ -20,6 +22,16 @@ def test_valid_frontmatter_splits_into_metadata_and_body():
         "status": "current",
     }
     assert body == "# Body\n\nSome prose.\n"
+
+
+def test_date_frontmatter_is_normalized_for_jsonb_storage():
+    raw = "---\nstale_after: 2026-09-05\n---\nbody\n"
+
+    metadata, body = split_frontmatter(raw)
+
+    assert metadata == {"stale_after": "2026-09-05"}
+    assert body == "body\n"
+    assert json.loads(json.dumps(metadata)) == metadata
 
 
 def test_no_frontmatter_returns_empty_metadata_and_full_body():
@@ -52,11 +64,6 @@ def test_yaml_tag_payload_is_rejected_not_executed():
     """Regression test for the RCE risk in the PRD 0019 security review:
     yaml.load()'s default loader would construct arbitrary Python objects
     from tags like !!python/object/apply. safe_load must reject this."""
-    raw = (
-        "---\n"
-        "evil: !!python/object/apply:os.system ['echo pwned']\n"
-        "---\n"
-        "body\n"
-    )
+    raw = "---\nevil: !!python/object/apply:os.system ['echo pwned']\n---\nbody\n"
     with pytest.raises(InvalidParameterError):
         split_frontmatter(raw)

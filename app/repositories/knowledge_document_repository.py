@@ -57,8 +57,7 @@ class KnowledgeDocumentRepository:
         self.db.commit()
 
     def delete_chunks_for_document(self, document_id: UUID) -> None:
-        """Used by the indexing task before re-chunking an updated document."""
+        """Stage chunk deletion in the caller's current transaction."""
         self.db.query(KnowledgeChunk).filter(
             KnowledgeChunk.document_id == document_id
         ).delete()
-        self.db.commit()

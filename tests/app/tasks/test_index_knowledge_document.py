@@ -46,6 +46,10 @@ def _run_task_against(db, adapter=None):
     patches = [
         patch("app.tasks.index_knowledge_document.SessionLocal", return_value=db),
         patch.object(db, "close"),
+        # Production owns this session and must roll it back on failure. The
+        # test fixture's session is bound to an outer rollback transaction, so
+        # keep task failures from tearing down that fixture boundary.
+        patch.object(db, "rollback"),
     ]
     if adapter is not None:
         patches.append(
@@ -109,6 +113,43 @@ def test_reindex_deletes_old_chunks_first(db):
 
     chunks = _chunks_for(db, document.id)
     assert len(chunks) == 1
+
+
+def test_reindex_preserves_existing_chunks_when_embedding_fails(db):
+    embedding_config = _make_embedding_config(db)
+    document = KnowledgeDocumentRepository(db).create(
+        title="Doc", content="original content", metadata={}
+    )
+    document_id = document.id
+    existing_chunk = KnowledgeChunk(
+        document_id=document_id,
+        chunk_index=0,
+        content="original content",
+        embedding=[0.1, 0.2],
+        embedding_config_id=embedding_config.id,
+        chunk_params={
+            "chunk_size": 300,
+            "chunk_overlap": 0,
+            "strategy": "fixed_size",
+        },
+    )
+    db.add(existing_chunk)
+    db.commit()
+
+    document.content = "replacement content"
+    db.commit()
+    failing_adapter = MagicMock()
+    failing_adapter.create_embeddings.side_effect = RuntimeError("provider unavailable")
+
+    with (
+        _run_task_against(db, adapter=failing_adapter),
+        pytest.raises(RuntimeError, match="provider unavailable"),
+    ):
+        index_knowledge_document_task(str(document_id))
+
+    chunks = _chunks_for(db, document_id)
+    assert len(chunks) == 1
+    assert chunks[0].content == "original content"
 
 
 def test_raises_when_no_default_embedding_config_exists(db):
