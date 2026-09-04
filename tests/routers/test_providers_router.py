@@ -1,3 +1,6 @@
+from unittest.mock import MagicMock, patch
+
+
 def test_list_providers_includes_parameter_specs(client):
     response = client.get("/providers")
 
@@ -49,3 +52,18 @@ def test_list_providers_omits_pricing_for_unrecognized_models(client):
     unreleased_model = anthropic_models["claude-opus-5"]
     assert unreleased_model["input_price_per_mtok"] is None
     assert unreleased_model["output_price_per_mtok"] is None
+
+
+def test_check_provider_catalog_queues_the_task_and_returns_task_id(client):
+    mock_result = MagicMock()
+    mock_result.id = "fake-task-id-123"
+
+    with patch(
+        "app.routers.providers_router.check_provider_model_catalog_task"
+    ) as mock_task:
+        mock_task.delay.return_value = mock_result
+        response = client.post("/providers/check-catalog")
+
+    assert response.status_code == 202
+    assert response.json() == {"task_id": "fake-task-id-123", "status": "queued"}
+    mock_task.delay.assert_called_once_with()

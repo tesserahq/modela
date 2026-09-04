@@ -40,3 +40,10 @@ class ProviderSchema(BaseModel):
     name: str
     models: list[ProviderModelSchema]
     parameters: ProviderParameters | None = None
+
+
+class ProviderCatalogCheckResponse(BaseModel):
+    """Response schema for POST /providers/check-catalog."""
+
+    task_id: str
+    status: str = "queued"
