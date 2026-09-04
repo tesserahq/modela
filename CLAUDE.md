@@ -11,9 +11,6 @@ poetry run dev           # or: poetry run uvicorn app.main:app --reload --port 8
 # Celery worker
 poetry run worker
 
-# NATS worker
-poetry run nats_worker
-
 # Tests (ENV=test required — switches DB to modela_test)
 ENV=test poetry run pytest
 ENV=test poetry run pytest tests/routers/  # run a subset

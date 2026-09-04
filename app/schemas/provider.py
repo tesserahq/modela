@@ -1,4 +1,13 @@
+from datetime import datetime
+
 from pydantic import BaseModel
+
+
+class LiveProviderModel(BaseModel):
+    """A model id as currently reported by a provider's live models endpoint."""
+
+    id: str
+    created_at: datetime
 
 
 class ParameterSpec(BaseModel):
@@ -17,6 +26,7 @@ class ProviderParameters(BaseModel):
 class ProviderModelSchema(BaseModel):
     id: str
     name: str
+    description: str | None = None
 
 
 class ProviderSchema(BaseModel):

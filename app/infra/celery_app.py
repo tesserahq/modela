@@ -1,5 +1,7 @@
 # pyright: reportMissingTypeStubs=false
 from celery import Celery
+from celery.schedules import crontab
+
 from app.config import get_settings
 
 settings = get_settings()
@@ -31,10 +33,22 @@ celery_app.conf.update(
 
 celery_app.autodiscover_tasks(["app.tasks"])  # ensure tasks are registered explicitly
 
+# First beat schedule in this repo — requires the `modela-beat` deployment
+# (already provisioned in production, running `celery ... beat`) to pick it up.
+celery_app.conf.beat_schedule = {
+    # Diffs each provider adapter's live model list against its curated
+    # _models list and publishes a NATS event on drift. Runs weekly, Monday
+    # 06:00 UTC.
+    "check-provider-model-catalog-weekly": {
+        "task": "app.tasks.check_provider_model_catalog.check_provider_model_catalog_task",
+        "schedule": crontab(day_of_week=1, hour=6, minute=0),
+    },
+}
+
 
 _update_prices = None
 
-from celery.signals import (  # noqa: E402
+from celery.signals import (
     worker_init,
     worker_process_init,
     worker_shutdown,
@@ -66,6 +80,7 @@ def _on_worker_process_init(sender, **kwargs):
         return
     try:
         from opentelemetry.instrumentation.celery import CeleryInstrumentor
+
         from app.telemetry import setup_tracing
 
         tracer_provider = setup_tracing()
@@ -91,8 +106,8 @@ def _on_worker_shutdown(sender, **kwargs):
 # def register_tasks():
 #     """Explicitly import tasks to ensure registration."""
 #     try:
-#         from app.tasks.process_import_items import process_import_items  # noqa: F401
-#         from app.tasks.backfill_digests import backfill_digests_task  # noqa: F401
+#         from app.tasks.process_import_items import process_import_items
+#         from app.tasks.backfill_digests import backfill_digests_task
 #         print(f"✅ Tasks registered: process_import_items, backfill_digests_task")
 #     except ImportError as e:
 #         print(f"⚠️  Warning: Could not import tasks: {e}")

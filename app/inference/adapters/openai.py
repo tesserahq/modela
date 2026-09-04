@@ -1,13 +1,27 @@
+from datetime import UTC, datetime
+
+import httpx
 from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openai import OpenAIProvider
+
 from app.config import get_settings
 from app.inference.adapters.base import BaseProviderAdapter
-from app.schemas.provider import ParameterSpec, ProviderModelSchema, ProviderParameters
+from app.schemas.provider import (
+    LiveProviderModel,
+    ParameterSpec,
+    ProviderModelSchema,
+    ProviderParameters,
+)
+
+OPENAI_MODELS_URL = "https://api.openai.com/v1/models"
 
 
 class OpenAIProviderAdapter(BaseProviderAdapter):
     provider_id = "openai"
     provider_name = "OpenAI"
+    # OpenAI's /v1/models also lists embeddings, whisper, tts, moderation,
+    # dall-e, etc. — these prefixes scope the catalog check to chat models.
+    model_id_prefixes = ("gpt", "o")
     parameters = ProviderParameters(
         temperature=ParameterSpec(default=1.0, min=0.0, max=2.0),
         top_p=ParameterSpec(default=1.0, min=0.0, max=1.0),
@@ -36,3 +50,23 @@ class OpenAIProviderAdapter(BaseProviderAdapter):
 
     def list_models(self) -> list[ProviderModelSchema]:
         return self._models
+
+    def fetch_live_model_ids(self) -> list[LiveProviderModel]:
+        key = get_settings().openai_api_key
+        if not key:
+            raise ValueError("OPENAI_API_KEY is not configured")
+
+        response = httpx.get(
+            OPENAI_MODELS_URL,
+            headers={"Authorization": f"Bearer {key}"},
+            timeout=10.0,
+        )
+        response.raise_for_status()
+        payload = response.json()
+        return [
+            LiveProviderModel(
+                id=item["id"],
+                created_at=datetime.fromtimestamp(item["created"], tz=UTC),
+            )
+            for item in payload.get("data", [])
+        ]
