@@ -25,26 +25,14 @@ class AnthropicProviderAdapter(BaseProviderAdapter):
         exclusive_parameter_groups=[["temperature", "top_p"]],
     )
 
+    # Grouped by family (Opus, Sonnet, Haiku, Fable), newest first within
+    # each family. When adding a new model, insert it into its family group
+    # rather than appending to the end, so the model picker stays grouped.
     _models = [
-        ProviderModelSchema(
-            id="claude-fable-5-1",
-            name="Claude Fable 5.1",
-            description="Best for creative and long-form writing, storytelling, and open-ended content generation.",
-        ),
         ProviderModelSchema(
             id="claude-opus-5",
             name="Claude Opus 5",
             description="Most capable model, best for complex reasoning, agentic tasks, and hard coding problems.",
-        ),
-        ProviderModelSchema(
-            id="claude-sonnet-5",
-            name="Claude Sonnet 5",
-            description="Balanced default, strong performance at lower cost and latency than Opus.",
-        ),
-        ProviderModelSchema(
-            id="claude-fable-5",
-            name="Claude Fable 5",
-            description="Best for creative and long-form writing, storytelling, and open-ended content generation.",
         ),
         ProviderModelSchema(
             id="claude-opus-4-8",
@@ -57,11 +45,6 @@ class AnthropicProviderAdapter(BaseProviderAdapter):
             description="Most capable model, best for complex reasoning, agentic tasks, and hard coding problems.",
         ),
         ProviderModelSchema(
-            id="claude-sonnet-4-6",
-            name="Claude Sonnet 4.6",
-            description="Balanced default, strong performance at lower cost and latency than Opus.",
-        ),
-        ProviderModelSchema(
             id="claude-opus-4-6",
             name="Claude Opus 4.6",
             description="Most capable model, best for complex reasoning, agentic tasks, and hard coding problems.",
@@ -72,14 +55,34 @@ class AnthropicProviderAdapter(BaseProviderAdapter):
             description="Most capable model, best for complex reasoning, agentic tasks, and hard coding problems.",
         ),
         ProviderModelSchema(
-            id="claude-haiku-4-5-20251001",
-            name="Claude Haiku 4.5",
-            description="Fastest and cheapest, best for high-volume, latency-sensitive tasks.",
+            id="claude-sonnet-5",
+            name="Claude Sonnet 5",
+            description="Balanced default, strong performance at lower cost and latency than Opus.",
+        ),
+        ProviderModelSchema(
+            id="claude-sonnet-4-6",
+            name="Claude Sonnet 4.6",
+            description="Balanced default, strong performance at lower cost and latency than Opus.",
         ),
         ProviderModelSchema(
             id="claude-sonnet-4-5-20250929",
             name="Claude Sonnet 4.5",
             description="Balanced default, strong performance at lower cost and latency than Opus.",
+        ),
+        ProviderModelSchema(
+            id="claude-haiku-4-5-20251001",
+            name="Claude Haiku 4.5",
+            description="Fastest and cheapest, best for high-volume, latency-sensitive tasks.",
+        ),
+        ProviderModelSchema(
+            id="claude-fable-5-1",
+            name="Claude Fable 5.1",
+            description="Best for creative and long-form writing, storytelling, and open-ended content generation.",
+        ),
+        ProviderModelSchema(
+            id="claude-fable-5",
+            name="Claude Fable 5",
+            description="Best for creative and long-form writing, storytelling, and open-ended content generation.",
         ),
     ]
 

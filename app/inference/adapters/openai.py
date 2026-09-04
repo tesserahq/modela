@@ -27,6 +27,9 @@ class OpenAIProviderAdapter(BaseProviderAdapter):
         top_p=ParameterSpec(default=1.0, min=0.0, max=1.0),
     )
 
+    # Grouped by family (4.1, 4o, o-series). When adding a new model, insert
+    # it into its family group rather than appending to the end, so the
+    # model picker stays grouped.
     _models = [
         ProviderModelSchema(id="gpt-4.1", name="GPT-4.1"),
         ProviderModelSchema(id="gpt-4.1-mini", name="GPT-4.1 Mini"),
