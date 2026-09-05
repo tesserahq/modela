@@ -29,6 +29,11 @@ class BaseProviderAdapter(ABC):
         """Return the curated list of available models for this provider."""
         raise NotImplementedError
 
+    def list_embedding_models(self) -> list[ProviderModelSchema]:
+        """Return the curated list of available embedding models for this provider.
+        Providers without an embeddings API (e.g. Anthropic) return an empty list."""
+        return []
+
     @abstractmethod
     def fetch_live_model_ids(self) -> list[LiveProviderModel]:
         """Fetch the provider's current live model list, for catalog drift detection only."""

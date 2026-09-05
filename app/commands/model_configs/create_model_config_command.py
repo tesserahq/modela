@@ -6,7 +6,10 @@ from sqlalchemy.orm import Session
 from app.exceptions.conflict_error import ConflictError
 from app.inference.adapters.parameter_validation import validate_model_config_parameters
 from app.repositories.model_config_repository import ModelConfigRepository
-from app.schemas.embedding_config_params import validate_embedding_config_params
+from app.schemas.embedding_config_params import (
+    validate_embedding_config_params,
+    validate_embedding_model_choice,
+)
 from app.schemas.model_config import ModelConfigCreate, ModelConfigResponse
 from app.services.tools.registry import validate_enabled_tools
 
@@ -25,6 +28,7 @@ class CreateModelConfigCommand:
             top_p=data.top_p,
         )
         validate_embedding_config_params(data.config_type, data.params)
+        validate_embedding_model_choice(data.config_type, data.provider, data.model)
         validate_enabled_tools(data.enabled_tools)
         try:
             record = self.model_config_repository.create(data.model_dump())
