@@ -1,5 +1,15 @@
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+from pydantic_ai.messages import (
+    ModelResponse,
+    PartStartEvent,
+    TextPart,
+    ToolCallPart,
+    ToolReturnPart,
+)
+from pydantic_ai.models.test import TestModel
+from pydantic_ai.toolsets.function import FunctionToolset
 
 
 def _make_mock_result(output="response text", input_tokens=5, output_tokens=10):
@@ -12,16 +22,21 @@ def _make_mock_result(output="response text", input_tokens=5, output_tokens=10):
     return result
 
 
-def _make_agent_mock(run_return=None, stream_result=None):
-    """Return a mock Agent instance with run/run_stream pre-configured."""
+def _make_agent_mock(run_return=None, stream_chunks=None):
+    """Return a mock Agent instance with run/run_stream_events pre-configured."""
     agent = MagicMock()
     agent.run = AsyncMock(return_value=run_return or _make_mock_result())
 
-    if stream_result is not None:
+    if stream_chunks is not None:
+
+        async def events():
+            for chunk in stream_chunks:
+                yield PartStartEvent(index=0, part=TextPart(chunk))
+
         ctx = AsyncMock()
-        ctx.__aenter__ = AsyncMock(return_value=stream_result)
+        ctx.__aenter__ = AsyncMock(return_value=events())
         ctx.__aexit__ = AsyncMock(return_value=False)
-        agent.run_stream = MagicMock(return_value=ctx)
+        agent.run_stream_events = MagicMock(return_value=ctx)
 
     return agent
 
@@ -79,34 +94,59 @@ class TestAgentRunnerRun:
 
 class TestAgentRunnerRunStream:
     @pytest.mark.asyncio
-    async def test_run_stream_passes_retries_kwarg(self, runner):
-        async def fake_stream_text(delta):
-            yield "chunk"
+    async def test_run_stream_completes_tool_loop_after_preamble(self):
+        tool_calls = []
 
-        stream_result = MagicMock()
-        stream_result.stream_text = fake_stream_text
-        agent = _make_agent_mock(stream_result=stream_result)
+        def lookup(value: int) -> int:
+            tool_calls.append(value)
+            return value * 2
+
+        class PreambleThenToolModel(TestModel):
+            def _request(self, messages, model_settings, model_request_parameters):
+                if any(
+                    isinstance(part, ToolReturnPart)
+                    for message in messages
+                    for part in message.parts
+                ):
+                    return ModelResponse(parts=[TextPart("final answer")])
+                return ModelResponse(
+                    parts=[
+                        TextPart("preamble"),
+                        ToolCallPart("lookup", {"value": 3}, "call-1"),
+                    ]
+                )
+
+        from app.inference.agent_runner import AgentRunner
+
+        chunks = [
+            chunk
+            async for chunk in AgentRunner(PreambleThenToolModel()).run_stream(
+                "go", toolsets=[FunctionToolset([lookup])]
+            )
+        ]
+
+        assert "".join(chunks) == "preamblefinal answer"
+        assert tool_calls == [3]
+
+    @pytest.mark.asyncio
+    async def test_run_stream_passes_retries_kwarg(self, runner):
+        agent = _make_agent_mock(stream_chunks=["chunk"])
 
         with patch("app.inference.agent_runner.Agent", return_value=agent):
             chunks = [c async for c in runner.run_stream("hello", max_result_retries=5)]
 
-        _, kwargs = agent.run_stream.call_args
+        _, kwargs = agent.run_stream_events.call_args
         assert kwargs.get("output_retries") == 5
         assert "retries" not in kwargs
         assert chunks == ["chunk"]
 
     @pytest.mark.asyncio
     async def test_run_stream_omits_retries_when_none(self, runner):
-        async def fake_stream_text(delta):
-            yield "chunk"
-
-        stream_result = MagicMock()
-        stream_result.stream_text = fake_stream_text
-        agent = _make_agent_mock(stream_result=stream_result)
+        agent = _make_agent_mock(stream_chunks=["chunk"])
 
         with patch("app.inference.agent_runner.Agent", return_value=agent):
-            chunks = [c async for c in runner.run_stream("hello")]
+            [c async for c in runner.run_stream("hello")]
 
-        _, kwargs = agent.run_stream.call_args
+        _, kwargs = agent.run_stream_events.call_args
         assert "output_retries" not in kwargs
         assert "retries" not in kwargs

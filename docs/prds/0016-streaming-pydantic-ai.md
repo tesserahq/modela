@@ -116,7 +116,10 @@ This check happens before the model is built or any provider call is made.
 
 ### MCP tools
 
-MCP tool execution is handled transparently by pydantic-ai's `agent.run_stream()` — tool calls occur internally between model turns. Only the final text output is streamed to the caller as SSE chunks. No changes are needed to MCP toolset assembly.
+MCP tool execution is handled through pydantic-ai's `agent.run_stream_events()`,
+which keeps the full agent graph running across tool-call rounds. Text emitted by
+each model turn is forwarded as SSE chunks, while tool-call and tool-result events
+remain internal. No changes are needed to MCP toolset assembly.
 
 ### Usage logging
 
@@ -167,4 +170,7 @@ Prior art: `tests/routers/test_completion_router.py` — uses `create_client_fix
 
 This PRD depends on PRD 0013 (AgentRunner) being implemented and stable. The pydantic-ai `Model.request_stream()` ABC raises `NotImplementedError` by default — any provider adapter that the `_inner` model delegates to must implement it. Both OpenAI and Anthropic pydantic-ai model implementations support streaming natively; no changes to provider adapters are required.
 
-The `run_stream()` method uses `agent.run_stream()` which, like `agent.run()`, handles the full agentic loop including tool call rounds. Streaming + MCP tools is therefore supported without extra work: tool execution happens transparently between model turns, and only the final text output is streamed to the client.
+The `run_stream()` method uses `agent.run_stream_events()` so the agent graph runs
+to completion across tool-call rounds. The simpler `agent.run_stream()` API must
+not be used here: it treats the first output matching the configured output type
+as final and can stop before executing a tool call that follows leading text.

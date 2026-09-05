@@ -1,18 +1,27 @@
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
-from typing import Any, AsyncIterator
+from typing import Any
 
 from opentelemetry import trace
 from pydantic_ai import Agent
 from pydantic_ai.exceptions import UnexpectedModelBehavior
-from pydantic_ai.messages import ModelMessage, ModelRequest, SystemPromptPart
+from pydantic_ai.messages import (
+    ModelMessage,
+    ModelRequest,
+    PartDeltaEvent,
+    PartStartEvent,
+    SystemPromptPart,
+    TextPart,
+    TextPartDelta,
+)
 from pydantic_ai.toolsets import AbstractToolset
 
 from app.exceptions.provider_errors import ProviderError
 from app.exceptions.structured_output_validation_error import (
     StructuredOutputValidationError,
 )
-from app.infra.telemetry import safe_instrument_span
 from app.inference.model import ModelaModel
+from app.infra.telemetry import safe_instrument_span
 
 tracer = trace.get_tracer(__name__)
 
@@ -126,6 +135,16 @@ class AgentRunner:
         with safe_instrument_span(
             tracer, "inference.agent.run", attributes=span_attributes
         ):
-            async with agent.run_stream(user_prompt, **run_kwargs) as result:
-                async for delta in result.stream_text(delta=True):
-                    yield delta
+            async with agent.run_stream_events(user_prompt, **run_kwargs) as events:
+                async for event in events:
+                    if isinstance(event, PartStartEvent) and isinstance(
+                        event.part, TextPart
+                    ):
+                        if event.part.content:
+                            yield event.part.content
+                    elif (
+                        isinstance(event, PartDeltaEvent)
+                        and isinstance(event.delta, TextPartDelta)
+                        and event.delta.content_delta
+                    ):
+                        yield event.delta.content_delta

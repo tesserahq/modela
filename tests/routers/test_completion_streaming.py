@@ -1,8 +1,19 @@
 import json
-import pytest
 from contextlib import asynccontextmanager
 from unittest.mock import MagicMock, patch
+
+import pytest
 from fastapi.testclient import TestClient
+from pydantic_ai.messages import (
+    ModelResponse,
+    PartDeltaEvent,
+    PartStartEvent,
+    TextPart,
+    TextPartDelta,
+    ToolCallPart,
+    ToolReturnPart,
+)
+from pydantic_ai.models.test import TestModel
 from sqlalchemy.orm import Session
 
 from app.repositories.model_config_repository import ModelConfigRepository
@@ -58,6 +69,20 @@ def config_with_system_prompt(db: Session):
     )
 
 
+@pytest.fixture
+def config_with_builtin_tool(db: Session):
+    return ModelConfigRepository(db).create(
+        {
+            "slug": "stream-with-tool",
+            "name": "Stream With Tool",
+            "provider": "openai",
+            "model": "gpt-4o",
+            "is_default": False,
+            "enabled_tools": ["search_knowledge_base"],
+        }
+    )
+
+
 @pytest.fixture(autouse=True)
 def mock_openai_api_key():
     mock_settings = MagicMock()
@@ -75,25 +100,27 @@ def mock_celery_task():
         yield m
 
 
-def _make_mock_run_stream(chunks: list[str]):
-    """Return an asynccontextmanager that yields a StreamedRunResult mock producing `chunks`."""
-
-    async def _stream_text(delta=True):
-        for chunk in chunks:
-            yield chunk
-
-    mock_result = MagicMock()
-    mock_result.stream_text = _stream_text
+def _make_mock_run_stream_events(chunks: list[str]):
+    """Return an asynccontextmanager yielding text events for `chunks`."""
 
     @asynccontextmanager
-    async def _run_stream(self, *args, **kwargs):
-        yield mock_result
+    async def _run_stream_events(self, *args, **kwargs):
+        async def _events():
+            for index, chunk in enumerate(chunks):
+                if index == 0:
+                    yield PartStartEvent(index=0, part=TextPart(chunk))
+                else:
+                    yield PartDeltaEvent(
+                        index=0, delta=TextPartDelta(content_delta=chunk)
+                    )
 
-    return _run_stream
+        yield _events()
+
+    return _run_stream_events
 
 
 def _collect_sse(client: TestClient, url: str, payload: dict) -> list[dict]:
-    """POST with stream=True and collect all parsed SSE data objects (excluding [DONE])."""
+    """POST with streaming and collect parsed SSE objects, excluding [DONE]."""
     with client.stream("POST", url, json=payload) as r:
         lines = list(r.iter_lines())
     chunks = []
@@ -105,8 +132,8 @@ def _collect_sse(client: TestClient, url: str, payload: dict) -> list[dict]:
 
 def test_stream_returns_event_stream_content_type(client: TestClient, default_config):
     with patch(
-        "app.inference.agent_runner.Agent.run_stream",
-        _make_mock_run_stream(["Hello"]),
+        "app.inference.agent_runner.Agent.run_stream_events",
+        _make_mock_run_stream_events(["Hello"]),
     ):
         with client.stream(
             "POST",
@@ -123,8 +150,8 @@ def test_stream_returns_event_stream_content_type(client: TestClient, default_co
 
 def test_stream_response_headers_present(client: TestClient, default_config):
     with patch(
-        "app.inference.agent_runner.Agent.run_stream",
-        _make_mock_run_stream(["Hi"]),
+        "app.inference.agent_runner.Agent.run_stream_events",
+        _make_mock_run_stream_events(["Hi"]),
     ):
         with client.stream(
             "POST",
@@ -142,8 +169,8 @@ def test_stream_response_headers_present(client: TestClient, default_config):
 
 def test_stream_chunks_have_openai_format(client: TestClient, default_config):
     with patch(
-        "app.inference.agent_runner.Agent.run_stream",
-        _make_mock_run_stream(["Hello", " world"]),
+        "app.inference.agent_runner.Agent.run_stream_events",
+        _make_mock_run_stream_events(["Hello", " world"]),
     ):
         chunks = _collect_sse(
             client,
@@ -166,8 +193,8 @@ def test_stream_chunks_have_openai_format(client: TestClient, default_config):
 
 def test_stream_first_chunk_has_role(client: TestClient, default_config):
     with patch(
-        "app.inference.agent_runner.Agent.run_stream",
-        _make_mock_run_stream(["Hello", " world"]),
+        "app.inference.agent_runner.Agent.run_stream_events",
+        _make_mock_run_stream_events(["Hello", " world"]),
     ):
         chunks = _collect_sse(
             client,
@@ -187,8 +214,8 @@ def test_stream_first_chunk_has_role(client: TestClient, default_config):
 
 def test_stream_subsequent_chunks_have_no_role(client: TestClient, default_config):
     with patch(
-        "app.inference.agent_runner.Agent.run_stream",
-        _make_mock_run_stream(["Hello", " world"]),
+        "app.inference.agent_runner.Agent.run_stream_events",
+        _make_mock_run_stream_events(["Hello", " world"]),
     ):
         chunks = _collect_sse(
             client,
@@ -210,8 +237,8 @@ def test_stream_subsequent_chunks_have_no_role(client: TestClient, default_confi
 
 def test_stream_final_chunk_has_finish_reason_stop(client: TestClient, default_config):
     with patch(
-        "app.inference.agent_runner.Agent.run_stream",
-        _make_mock_run_stream(["Hello"]),
+        "app.inference.agent_runner.Agent.run_stream_events",
+        _make_mock_run_stream_events(["Hello"]),
     ):
         chunks = _collect_sse(
             client,
@@ -230,8 +257,8 @@ def test_stream_final_chunk_has_finish_reason_stop(client: TestClient, default_c
 
 def test_stream_ends_with_done(client: TestClient, default_config):
     with patch(
-        "app.inference.agent_runner.Agent.run_stream",
-        _make_mock_run_stream(["Hello"]),
+        "app.inference.agent_runner.Agent.run_stream_events",
+        _make_mock_run_stream_events(["Hello"]),
     ):
         with client.stream(
             "POST",
@@ -249,8 +276,8 @@ def test_stream_ends_with_done(client: TestClient, default_config):
 
 def test_stream_chunks_share_same_id(client: TestClient, default_config):
     with patch(
-        "app.inference.agent_runner.Agent.run_stream",
-        _make_mock_run_stream(["Hello", " world"]),
+        "app.inference.agent_runner.Agent.run_stream_events",
+        _make_mock_run_stream_events(["Hello", " world"]),
     ):
         chunks = _collect_sse(
             client,
@@ -265,6 +292,69 @@ def test_stream_chunks_share_same_id(client: TestClient, default_config):
     ids = {c["id"] for c in chunks}
     assert len(ids) == 1
     assert list(ids)[0].startswith("chatcmpl-")
+
+
+def test_stream_completes_tool_loop_before_stop(
+    client: TestClient, config_with_builtin_tool
+):
+    tool_results = []
+
+    class PreambleThenToolModel(TestModel):
+        def _request(self, messages, model_settings, model_request_parameters):
+            for message in messages:
+                for part in message.parts:
+                    if isinstance(part, ToolReturnPart):
+                        tool_results.append(part.content)
+                        return ModelResponse(parts=[TextPart("Final grounded answer.")])
+            return ModelResponse(
+                parts=[
+                    TextPart("Let me look that up. "),
+                    ToolCallPart(
+                        "search_knowledge_base",
+                        {"query": "the answer"},
+                        "call-1",
+                    ),
+                ]
+            )
+
+    with (
+        patch(
+            "app.commands.completions.create_completion_command.build_model",
+            return_value=PreambleThenToolModel(),
+        ),
+        patch(
+            "app.services.tools.builtin_toolset.search_knowledge_base_chunks",
+            return_value=["grounded fact"],
+        ) as search,
+        client.stream(
+            "POST",
+            "/chat/completions",
+            json={
+                "model": config_with_builtin_tool.slug,
+                "messages": [{"role": "user", "content": "What is the answer?"}],
+                "stream": True,
+            },
+        ) as response,
+    ):
+        lines = list(response.iter_lines())
+
+    chunks = [
+        json.loads(line.removeprefix("data: "))
+        for line in lines
+        if line.startswith("data: ") and line != "data: [DONE]"
+    ]
+    content = "".join(
+        chunk["choices"][0]["delta"].get("content", "") for chunk in chunks
+    )
+
+    assert response.status_code == 200
+    assert content == "Let me look that up. Final grounded answer."
+    assert tool_results == [["grounded fact"]]
+    search.assert_called_once()
+    assert search.call_args.args[1] == "the answer"
+    assert sum(chunk["choices"][0]["finish_reason"] == "stop" for chunk in chunks) == 1
+    assert chunks[-1]["choices"][0]["finish_reason"] == "stop"
+    assert [line for line in lines if line][-1] == "data: [DONE]"
 
 
 def test_stream_with_output_schema_returns_422(
@@ -326,8 +416,8 @@ def test_stream_unknown_slug_returns_404(client: TestClient):
 
 def test_stream_with_system_prompt(client: TestClient, config_with_system_prompt):
     with patch(
-        "app.inference.agent_runner.Agent.run_stream",
-        _make_mock_run_stream(["Hello"]),
+        "app.inference.agent_runner.Agent.run_stream_events",
+        _make_mock_run_stream_events(["Hello"]),
     ):
         with client.stream(
             "POST",
