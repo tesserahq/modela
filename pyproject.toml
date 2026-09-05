@@ -31,7 +31,7 @@ alembic = "^1.15.1"
 faker = "40.38.0"
 psycopg2-binary = "^2.9.10"
 black = "^26.5.1"
-ruff = "0.16.1"
+ruff = "0.16.6"
 python-jose = "^3.3.0"
 
 opentelemetry-instrumentation-fastapi = "^0.63b1"
