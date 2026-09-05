@@ -1,21 +1,23 @@
 import logging
-from fastapi import FastAPI, Depends
-from fastapi.middleware.cors import CORSMiddleware
-from app.config import get_settings
+
 import rollbar
-from rollbar.logger import RollbarHandler
-from rollbar.contrib.fastapi import ReporterMiddleware as RollbarMiddleware
+from fastapi import Depends, FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.openapi.utils import get_openapi
 from fastapi_pagination import add_pagination
-from tessera_sdk.server.health import get_livez_readyz_router
-from prometheus_fastapi_instrumentator import Instrumentator
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
-from app.telemetry import setup_tracing, _patch_fastapi_route_details
+from prometheus_fastapi_instrumentator import Instrumentator
+from rollbar.contrib.fastapi import ReporterMiddleware as RollbarMiddleware
+from rollbar.logger import RollbarHandler
+from tessera_sdk.server.dependencies.auth import get_current_user
+from tessera_sdk.server.health import get_livez_readyz_router
+
+from app.config import get_settings
+from app.db import db_manager
 from app.exceptions.handlers import register_exception_handlers
 from app.infra.logging_config import get_logger
-from app.db import db_manager
-from tessera_sdk.server.dependencies.auth import get_current_user
-from fastapi.openapi.utils import get_openapi
 from app.models.user import User
+from app.telemetry import _patch_fastapi_route_details, setup_tracing
 
 SKIP_AUTH_PATHS = ["/livez", "/readyz", "/metrics"]
 
@@ -49,13 +51,14 @@ def create_app(testing: bool = False, auth_middleware=None) -> FastAPI:
 
     if not testing and not settings.disable_auth:
         logger.info("Main: Adding authentication middleware")
+        from tessera_sdk.infra.service_factory import create_service_factory
         from tessera_sdk.server.middleware.authentication import (
             AuthenticationMiddleware,
         )
         from tessera_sdk.server.middleware.user_onboarding import (
             UserOnboardingMiddleware,
         )
-        from tessera_sdk.infra.service_factory import create_service_factory
+
         from app.repositories.user_repository import UserRepository
 
         # Create service factory for UserRepository
@@ -87,18 +90,22 @@ def create_app(testing: bool = False, auth_middleware=None) -> FastAPI:
 
     app.include_router(get_livez_readyz_router())
 
-    from app.routers.model_config_router import router as model_config_router
+    from app.routers.analytics_router import router as analytics_router
     from app.routers.completion_request_router import (
         router as completion_request_router,
     )
     from app.routers.completion_router import router as completion_router
-    from app.routers.system_prompts_router import router as system_prompts_router
     from app.routers.credentials_router import router as credentials_router
+    from app.routers.knowledge_documents_router import (
+        router as knowledge_documents_router,
+    )
     from app.routers.mcp_servers_router import router as mcp_servers_router
-    from app.routers.summarize_router import router as summarize_router
-    from app.routers.scan_router import router as scan_router
-    from app.routers.analytics_router import router as analytics_router
+    from app.routers.model_config_router import router as model_config_router
     from app.routers.providers_router import router as providers_router
+    from app.routers.scan_router import router as scan_router
+    from app.routers.summarize_router import router as summarize_router
+    from app.routers.system_prompts_router import router as system_prompts_router
+    from app.routers.tools_router import router as tools_router
 
     app.include_router(model_config_router)
     app.include_router(completion_request_router)
@@ -110,6 +117,8 @@ def create_app(testing: bool = False, auth_middleware=None) -> FastAPI:
     app.include_router(scan_router)
     app.include_router(analytics_router)
     app.include_router(providers_router)
+    app.include_router(knowledge_documents_router)
+    app.include_router(tools_router)
 
     register_exception_handlers(app)
 

@@ -1,20 +1,22 @@
 import uuid
+
 from sqlalchemy import (
+    Boolean,
     Column,
     DateTime,
-    String,
-    Boolean,
-    Integer,
     Float,
-    Index,
     ForeignKey,
+    Index,
+    Integer,
+    String,
     Table,
     text,
 )
-from sqlalchemy.dialects.postgresql import UUID, JSONB
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.orm import relationship
+
 from app.db import Base
-from app.models.mixins import TimestampMixin, SoftDeleteMixin
+from app.models.mixins import SoftDeleteMixin, TimestampMixin
 
 model_config_mcp_servers = Table(
     "model_config_mcp_servers",
@@ -60,9 +62,11 @@ class ModelConfig(Base, TimestampMixin, SoftDeleteMixin):
     max_tokens = Column(Integer, nullable=True)
     top_p = Column(Float, nullable=True)
     output_schema = Column(JSONB, nullable=True)
+    params = Column(JSONB, nullable=True)
     config_type = Column(String(50), nullable=False, default="chat")
     is_default = Column(Boolean, nullable=False, default=False, index=True)
     max_tool_rounds = Column(Integer, nullable=True)
+    enabled_tools = Column(ARRAY(String), nullable=True)
 
     system_prompt = relationship(
         "SystemPrompt",

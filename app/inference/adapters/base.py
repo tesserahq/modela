@@ -33,3 +33,12 @@ class BaseProviderAdapter(ABC):
     def fetch_live_model_ids(self) -> list[LiveProviderModel]:
         """Fetch the provider's current live model list, for catalog drift detection only."""
         raise NotImplementedError
+
+    def create_embeddings(
+        self, model_name: str, texts: list[str], api_key: str | None = None
+    ) -> list[list[float]]:
+        """Return one embedding vector per input text, in order. Synchronous, like
+        create_model(). Resolves its own key from settings when api_key is None.
+        Providers without an embeddings API (e.g. Anthropic) don't need to override
+        this — the default raises NotImplementedError."""
+        raise NotImplementedError(f"{self.provider_id} does not support embeddings")

@@ -1,27 +1,27 @@
 import time
 import uuid
-from typing import Optional
 from uuid import UUID
 
 from fastapi import HTTPException
+from pydantic_ai.messages import (
+    ModelRequest,
+    ModelResponse,
+    TextPart,
+    UserPromptPart,
+)
 from sqlalchemy.orm import Session
 
 from app.commands.completions.schema_to_model import schema_to_model
 from app.exceptions.resource_not_found_error import ResourceNotFoundError
 from app.inference import AgentRunner, build_model
+from app.infra.logging_config import get_logger
 from app.repositories.mcp_tool_catalog_repository import MCPToolCatalogRepository
 from app.repositories.model_config_repository import ModelConfigRepository
 from app.repositories.system_prompt_repository import SystemPromptRepository
 from app.schemas.completion import CompletionCreate, CompletionResponse
 from app.services.mcp.mcp_toolset import MCPToolset
 from app.services.mcp.tool_executor import MCPToolExecutor
-from pydantic_ai.messages import (
-    ModelRequest,
-    ModelResponse,
-    UserPromptPart,
-    TextPart,
-)
-from app.infra.logging_config import get_logger
+from app.services.tools.builtin_toolset import build_builtin_toolset
 
 logger = get_logger()
 
@@ -41,7 +41,7 @@ class CreateCompletionCommand:
     ) -> CompletionResponse:
         config = self._resolve_config(payload.model)
 
-        result_model: Optional[type] = None
+        result_model: type | None = None
         if config.output_schema:
             result_model = schema_to_model(config.output_schema)
 
@@ -59,10 +59,7 @@ class CreateCompletionCommand:
 
         messages, user_prompt = _split_messages(payload.messages)
 
-        toolsets = None
-        if tools:
-            executor = MCPToolExecutor(self.db)
-            toolsets = [MCPToolset(tools, executor, user_id=user_id)]
+        toolsets = self._build_toolsets(config, tools, user_id)
 
         result = await AgentRunner(model).run(
             user_prompt,
@@ -122,10 +119,7 @@ class CreateCompletionCommand:
 
         messages, user_prompt = _split_messages(payload.messages)
 
-        toolsets = None
-        if tools:
-            executor = MCPToolExecutor(self.db)
-            toolsets = [MCPToolset(tools, executor, user_id=user_id)]
+        toolsets = self._build_toolsets(config, tools, user_id)
 
         return config.slug, AgentRunner(model).run_stream(
             user_prompt,
@@ -134,15 +128,36 @@ class CreateCompletionCommand:
             toolsets=toolsets,
         )
 
+    def _build_toolsets(self, config, mcp_tools, user_id):
+        """Combines the MCP-server toolset (existing, per-server tools) with
+        the built-in toolset (config.enabled_tools) into one list, or None if
+        neither has anything to contribute — mirrors the pre-existing
+        `toolsets = None unless truthy` contract AgentRunner.run()/run_stream()
+        rely on."""
+        toolsets = []
+        if mcp_tools:
+            executor = MCPToolExecutor(self.db)
+            toolsets.append(MCPToolset(mcp_tools, executor, user_id=user_id))
+        builtin_toolset = build_builtin_toolset(self.db, config.enabled_tools)
+        if builtin_toolset is not None:
+            toolsets.append(builtin_toolset)
+        return toolsets or None
+
     def _resolve_config(self, model_slug):
         if model_slug:
             config = self.repo.get_by_slug(model_slug)
             if config is None:
                 raise ResourceNotFoundError(f"ModelConfig '{model_slug}' not found")
+            if config.config_type != "chat":
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"ModelConfig '{model_slug}' is not a chat config "
+                    f"(config_type='{config.config_type}')",
+                )
             return config
-        config = self.repo.get_default()
+        config = self.repo.get_default_for_type("chat")
         if config is None:
-            raise ResourceNotFoundError("No default ModelConfig is configured")
+            raise ResourceNotFoundError("No default chat ModelConfig is configured")
         return config
 
 

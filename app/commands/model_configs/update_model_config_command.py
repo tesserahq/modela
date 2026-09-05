@@ -1,11 +1,15 @@
 import logging
+
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+
 from app.exceptions.conflict_error import ConflictError
 from app.inference.adapters.parameter_validation import validate_model_config_parameters
 from app.models.model_config import ModelConfig
 from app.repositories.model_config_repository import ModelConfigRepository
-from app.schemas.model_config import ModelConfigUpdate, ModelConfigResponse
+from app.schemas.embedding_config_params import validate_embedding_config_params
+from app.schemas.model_config import ModelConfigResponse, ModelConfigUpdate
+from app.services.tools.registry import validate_enabled_tools
 
 
 class UpdateModelConfigCommand:
@@ -24,6 +28,11 @@ class UpdateModelConfigCommand:
             max_tokens=updates.get("max_tokens", record.max_tokens),
             top_p=updates.get("top_p", record.top_p),
         )
+        validate_embedding_config_params(
+            updates.get("config_type", record.config_type),
+            updates.get("params", record.params),
+        )
+        validate_enabled_tools(updates.get("enabled_tools", record.enabled_tools))
         try:
             updated = self.model_config_repository.update(
                 record, data.model_dump(exclude_unset=True)

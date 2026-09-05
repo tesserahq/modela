@@ -18,7 +18,7 @@ jobs:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
           POSTGRES_DB: modela_test
-        image: postgres:18
+        image: pgvector/pgvector:pg18
         ports: ["5432:5432"]
         options: >-
           --health-cmd pg_isready

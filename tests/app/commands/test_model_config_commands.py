@@ -1,20 +1,23 @@
 import pytest
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+
 from app.commands.model_configs.create_model_config_command import (
     CreateModelConfigCommand,
-)
-from app.commands.model_configs.update_model_config_command import (
-    UpdateModelConfigCommand,
 )
 from app.commands.model_configs.delete_model_config_command import (
     DeleteModelConfigCommand,
 )
+from app.commands.model_configs.update_model_config_command import (
+    UpdateModelConfigCommand,
+)
 from app.exceptions.invalid_parameter_error import InvalidParameterError
+from app.models.model_config import ModelConfig
 from app.repositories.model_config_repository import ModelConfigRepository
 from app.schemas.model_config import (
     ModelConfigCreate,
-    ModelConfigUpdate,
     ModelConfigResponse,
+    ModelConfigUpdate,
 )
 
 
@@ -114,4 +117,128 @@ def test_update_partial_fields_unchanged(db: Session, existing_config):
 def test_delete_soft_deletes_record(db: Session, existing_config):
     DeleteModelConfigCommand(db).execute(existing_config)
 
-    assert ModelConfigRepository(db).get_by_slug(existing_config.slug) is None
+    assert ModelConfigRepository(db).get_by_id(existing_config.id) is None
+
+
+# --- embedding config_type params validation ---
+
+
+def _embedding_payload(**params_overrides):
+    params = {"chunk_size": 500, "chunk_overlap": 50, "strategy": "fixed_size"}
+    params.update(params_overrides)
+    return ModelConfigCreate(
+        slug=f"embed-{params_overrides.get('slug', 'default')}",
+        name="Embedding Config",
+        provider="openai",
+        model="text-embedding-3-small",
+        config_type="embedding",
+        params=params,
+    )
+
+
+def test_create_embedding_config_with_valid_params_succeeds(db: Session):
+    result = CreateModelConfigCommand(db).execute(_embedding_payload())
+    assert result.config_type == "embedding"
+    assert result.params == {
+        "chunk_size": 500,
+        "chunk_overlap": 50,
+        "strategy": "fixed_size",
+    }
+
+
+def test_create_embedding_config_requires_params(db: Session):
+    payload = ModelConfigCreate(
+        slug="embed-no-params",
+        name="Embedding Config",
+        provider="openai",
+        model="text-embedding-3-small",
+        config_type="embedding",
+    )
+    with pytest.raises(InvalidParameterError):
+        CreateModelConfigCommand(db).execute(payload)
+
+
+def test_create_embedding_config_rejects_overlap_gte_chunk_size(db: Session):
+    payload = _embedding_payload(chunk_size=100, chunk_overlap=100)
+    with pytest.raises(InvalidParameterError):
+        CreateModelConfigCommand(db).execute(payload)
+
+
+def test_create_embedding_config_rejects_unknown_strategy(db: Session):
+    payload = _embedding_payload(strategy="semantic")
+    with pytest.raises(InvalidParameterError):
+        CreateModelConfigCommand(db).execute(payload)
+
+
+def test_create_embedding_config_rejects_chunk_size_out_of_range(db: Session):
+    payload = _embedding_payload(chunk_size=100)  # below the 256 minimum
+    with pytest.raises(InvalidParameterError):
+        CreateModelConfigCommand(db).execute(payload)
+
+
+def test_non_embedding_config_type_ignores_params_validation(
+    db: Session, create_payload
+):
+    # config_type="chat" (the default) never requires/validates `params`.
+    result = CreateModelConfigCommand(db).execute(create_payload)
+    assert result.params is None
+
+
+# --- one default per config_type (regression test for the PRD 0019 review's
+# claim, verified during implementation planning to already be enforced at
+# the DB level by migration 2026_05_18_0006 + IntegrityError->ConflictError
+# handling in these commands) ---
+
+
+def test_two_default_embedding_configs_violate_db_constraint(db: Session):
+    """CreateModelConfigCommand's _clear_default-then-insert sequence handles
+    sequential requests fine (each clear happens before the next insert), so
+    this exercises the DB-level partial unique index directly — the scenario
+    a real race between two concurrent requests could produce."""
+    with pytest.raises(IntegrityError), db.begin_nested():
+        db.add(
+            ModelConfig(
+                slug="embed-a",
+                name="A",
+                provider="openai",
+                model="text-embedding-3-small",
+                config_type="embedding",
+                is_default=True,
+            )
+        )
+        db.add(
+            ModelConfig(
+                slug="embed-b",
+                name="B",
+                provider="openai",
+                model="text-embedding-3-small",
+                config_type="embedding",
+                is_default=True,
+            )
+        )
+        db.flush()
+
+
+# --- enabled_tools validation ---
+
+
+def test_create_with_valid_enabled_tools_succeeds(db: Session, create_payload):
+    payload = create_payload.model_copy(
+        update={"slug": "with-tools", "enabled_tools": ["search_knowledge_base"]}
+    )
+    result = CreateModelConfigCommand(db).execute(payload)
+    assert result.enabled_tools == ["search_knowledge_base"]
+
+
+def test_create_with_unknown_tool_name_rejected(db: Session, create_payload):
+    payload = create_payload.model_copy(
+        update={"slug": "bad-tools", "enabled_tools": ["not_a_real_tool"]}
+    )
+    with pytest.raises(InvalidParameterError):
+        CreateModelConfigCommand(db).execute(payload)
+
+
+def test_update_with_unknown_tool_name_rejected(db: Session, existing_config):
+    payload = ModelConfigUpdate(enabled_tools=["not_a_real_tool"])
+    with pytest.raises(InvalidParameterError):
+        UpdateModelConfigCommand(db).execute(existing_config, payload)
