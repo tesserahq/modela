@@ -176,6 +176,34 @@ def test_create_embedding_config_rejects_chunk_size_out_of_range(db: Session):
         CreateModelConfigCommand(db).execute(payload)
 
 
+def test_create_embedding_config_rejects_model_not_in_provider_catalog(db: Session):
+    payload = ModelConfigCreate(
+        slug="embed-bad-model",
+        name="Embedding Config",
+        provider="openai",
+        model="not-a-real-embedding-model",
+        config_type="embedding",
+        params={"chunk_size": 500, "chunk_overlap": 50, "strategy": "fixed_size"},
+    )
+    with pytest.raises(InvalidParameterError):
+        CreateModelConfigCommand(db).execute(payload)
+
+
+def test_create_embedding_config_rejects_provider_with_no_embedding_models(
+    db: Session,
+):
+    payload = ModelConfigCreate(
+        slug="embed-anthropic",
+        name="Embedding Config",
+        provider="anthropic",
+        model="claude-opus-5",
+        config_type="embedding",
+        params={"chunk_size": 500, "chunk_overlap": 50, "strategy": "fixed_size"},
+    )
+    with pytest.raises(InvalidParameterError):
+        CreateModelConfigCommand(db).execute(payload)
+
+
 def test_non_embedding_config_type_ignores_params_validation(
     db: Session, create_payload
 ):

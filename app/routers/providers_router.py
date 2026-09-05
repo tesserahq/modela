@@ -53,6 +53,9 @@ def list_providers(
             id=adapter.provider_id,
             name=adapter.provider_name,
             models=[_with_pricing(adapter, m) for m in adapter.list_models()],
+            embedding_models=[
+                _with_pricing(adapter, m) for m in adapter.list_embedding_models()
+            ],
             parameters=adapter.parameters,
         )
         for adapter in PROVIDER_REGISTRY.values()

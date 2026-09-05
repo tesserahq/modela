@@ -92,6 +92,18 @@ def test_list_providers_groups_models_by_family(client):
     _assert_contiguous_families(openai_ids, ("4.1", "4o", "o3", "o4"))
 
 
+def test_list_providers_includes_embedding_models(client):
+    response = client.get("/providers")
+
+    assert response.status_code == 200
+    providers = {item["id"]: item for item in response.json()}
+
+    openai_embedding_ids = {m["id"] for m in providers["openai"]["embedding_models"]}
+    assert openai_embedding_ids == {"text-embedding-3-small", "text-embedding-3-large"}
+
+    assert providers["anthropic"]["embedding_models"] == []
+
+
 def test_check_provider_catalog_queues_the_task_and_returns_task_id(client):
     mock_result = MagicMock()
     mock_result.id = "fake-task-id-123"

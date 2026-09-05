@@ -7,7 +7,10 @@ from app.exceptions.conflict_error import ConflictError
 from app.inference.adapters.parameter_validation import validate_model_config_parameters
 from app.models.model_config import ModelConfig
 from app.repositories.model_config_repository import ModelConfigRepository
-from app.schemas.embedding_config_params import validate_embedding_config_params
+from app.schemas.embedding_config_params import (
+    validate_embedding_config_params,
+    validate_embedding_model_choice,
+)
 from app.schemas.model_config import ModelConfigResponse, ModelConfigUpdate
 from app.services.tools.registry import validate_enabled_tools
 
@@ -31,6 +34,11 @@ class UpdateModelConfigCommand:
         validate_embedding_config_params(
             updates.get("config_type", record.config_type),
             updates.get("params", record.params),
+        )
+        validate_embedding_model_choice(
+            updates.get("config_type", record.config_type),
+            updates.get("provider", record.provider),
+            updates.get("model", record.model),
         )
         validate_enabled_tools(updates.get("enabled_tools", record.enabled_tools))
         try:

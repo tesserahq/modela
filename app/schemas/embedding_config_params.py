@@ -3,6 +3,7 @@ from typing import Any
 from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
 
 from app.exceptions.invalid_parameter_error import InvalidParameterError
+from app.inference.adapters.registry import get_adapter
 
 EMBEDDING_CHUNK_STRATEGIES = {"fixed_size"}
 
@@ -42,3 +43,22 @@ def validate_embedding_config_params(
         EmbeddingConfigParams.model_validate(params)
     except ValidationError as exc:
         raise InvalidParameterError(f"Invalid embedding config params: {exc}")
+
+
+def validate_embedding_model_choice(
+    config_type: str, provider: str, model: str
+) -> None:
+    """Validate that `model` is in `provider`'s embedding catalog for
+    config_type="embedding". No-op for other config types and for unknown
+    providers (parameter validation elsewhere already tolerates those)."""
+    if config_type != "embedding":
+        return
+    try:
+        adapter = get_adapter(provider)
+    except ValueError:
+        return
+    valid_ids = {m.id for m in adapter.list_embedding_models()}
+    if model not in valid_ids:
+        raise InvalidParameterError(
+            f"'{model}' is not a supported embedding model for provider '{provider}'"
+        )

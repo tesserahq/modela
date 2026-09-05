@@ -41,6 +41,11 @@ class OpenAIProviderAdapter(BaseProviderAdapter):
         ProviderModelSchema(id="o4-mini", name="o4 Mini"),
     ]
 
+    _embedding_models = [
+        ProviderModelSchema(id="text-embedding-3-small", name="Text Embedding 3 Small"),
+        ProviderModelSchema(id="text-embedding-3-large", name="Text Embedding 3 Large"),
+    ]
+
     def create_model(
         self, model_name: str, api_key: str | None = None
     ) -> OpenAIChatModel:
@@ -64,6 +69,9 @@ class OpenAIProviderAdapter(BaseProviderAdapter):
 
     def list_models(self) -> list[ProviderModelSchema]:
         return self._models
+
+    def list_embedding_models(self) -> list[ProviderModelSchema]:
+        return self._embedding_models
 
     def fetch_live_model_ids(self) -> list[LiveProviderModel]:
         key = get_settings().openai_api_key

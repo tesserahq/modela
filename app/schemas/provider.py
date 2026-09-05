@@ -39,6 +39,7 @@ class ProviderSchema(BaseModel):
     id: str
     name: str
     models: list[ProviderModelSchema]
+    embedding_models: list[ProviderModelSchema] = []
     parameters: ProviderParameters | None = None
 
 
