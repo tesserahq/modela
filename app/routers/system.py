@@ -1,16 +1,20 @@
+from urllib.parse import urlsplit
+
 from fastapi import APIRouter, Depends
+from tessera_sdk.config import get_settings as get_sdk_settings
+from tessera_sdk.server.dependencies.auth import get_current_user
+
+from app.auth.rbac import build_rbac_dependencies, infer_domain
+from app.config import get_settings
 from app.schemas.system import (
-    GeneralGroup,
-    SystemSettingsGrouped,
     AppGroup,
     DatabaseGroup,
-    TelemetryGroup,
-    RedisGroup,
     ExternalServicesGroup,
+    GeneralGroup,
+    RedisGroup,
+    SystemSettingsGrouped,
+    TelemetryGroup,
 )
-from tessera_sdk.server.dependencies.auth import get_current_user
-from app.config import get_settings
-from app.auth.rbac import build_rbac_dependencies, infer_domain
 
 router = APIRouter(
     prefix="/system",
@@ -24,6 +28,17 @@ rbac = build_rbac_dependencies(
     resource=RESOURCE,
     domain_resolver=infer_domain,
 )
+
+
+def _get_redis_group() -> RedisGroup:
+    settings = get_sdk_settings()
+    connection_url = urlsplit(settings.redis_connection_url)
+
+    return RedisGroup(
+        host=connection_url.hostname or settings.redis_host,
+        port=connection_url.port or settings.redis_port,
+        namespace=settings.redis_namespace,
+    )
 
 
 @router.get("/settings", response_model=SystemSettingsGrouped)
@@ -69,11 +84,7 @@ def get_system_settings(
         otel_service_name=s.otel_service_name,
     )
 
-    redis_group = RedisGroup(
-        host=s.redis_host,
-        port=s.redis_port,
-        namespace=s.redis_namespace,
-    )
+    redis_group = _get_redis_group()
 
     services_group = ExternalServicesGroup(
         vaulta_api_url=s.vaulta_api_url,
