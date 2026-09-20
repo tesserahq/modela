@@ -1,16 +1,18 @@
 # pyright: reportMissingTypeStubs=false
 from celery import Celery
 from celery.schedules import crontab
+from tessera_sdk.config import get_settings as get_sdk_settings
 
 from app.config import get_settings
 
 settings = get_settings()
+redis_settings = get_sdk_settings()
 
 celery_app = Celery("modela-worker")
 
 celery_app.conf.update(
-    broker_url=f"redis://{settings.redis_host}:{settings.redis_port}/0",
-    result_backend=f"redis://{settings.redis_host}:{settings.redis_port}/0",
+    broker_url=redis_settings.redis_connection_url,
+    result_backend=redis_settings.redis_connection_url,
     task_default_queue="modela",  # Use dedicated queue for modela tasks
     task_routes={
         "app.tasks.*": {"queue": "modela"},  # Route all app.tasks.* to modela queue
