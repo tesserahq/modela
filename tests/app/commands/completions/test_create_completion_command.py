@@ -1,4 +1,12 @@
-from app.commands.completions.create_completion_command import CreateCompletionCommand
+from types import SimpleNamespace
+
+from pydantic_ai.messages import ModelRequest, ModelResponse
+
+from app.commands.completions.create_completion_command import (
+    CreateCompletionCommand,
+    _merge_system_prompts,
+    _split_messages,
+)
 from app.repositories.model_config_repository import ModelConfigRepository
 from app.schemas.mcp_tool import MCPCatalogTool
 
@@ -61,3 +69,49 @@ def test_mcp_tools_only_matches_pre_existing_behavior(db):
     assert toolsets is not None
     assert len(toolsets) == 1
     assert toolsets[0].id == "mcp"
+
+
+def _msg(role, content):
+    return SimpleNamespace(role=role, content=content)
+
+
+def test_split_messages_collects_system_messages_instead_of_dropping_them():
+    system_prompts, history, user_prompt = _split_messages(
+        [
+            _msg("system", "You are Dogy."),
+            _msg("user", "hello?"),
+            _msg("assistant", "Hi!"),
+            _msg("system", "Current app context: account_id=abc"),
+            _msg("user", "create a list"),
+        ]
+    )
+
+    assert system_prompts == [
+        "You are Dogy.",
+        "Current app context: account_id=abc",
+    ]
+    assert [type(m) for m in history] == [ModelRequest, ModelResponse]
+    assert user_prompt == "create a list"
+
+
+def test_split_messages_without_system_messages():
+    system_prompts, history, user_prompt = _split_messages([_msg("user", "hi")])
+
+    assert system_prompts == []
+    assert history == []
+    assert user_prompt == "hi"
+
+
+def test_merge_system_prompts_puts_config_prompt_first():
+    assert (
+        _merge_system_prompts("config", ["caller one", "caller two"])
+        == "config\n\ncaller one\n\ncaller two"
+    )
+
+
+def test_merge_system_prompts_caller_only():
+    assert _merge_system_prompts(None, ["caller"]) == "caller"
+
+
+def test_merge_system_prompts_returns_none_when_empty():
+    assert _merge_system_prompts(None, []) is None

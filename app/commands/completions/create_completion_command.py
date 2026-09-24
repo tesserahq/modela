@@ -51,13 +51,16 @@ class CreateCompletionCommand:
 
         model = build_model(config, project_id, request_id, user_id=user_id)
 
-        system_prompt_content = None
+        config_system_prompt = None
         if config.system_prompt_id is not None:
-            system_prompt_content = SystemPromptRepository(
+            config_system_prompt = SystemPromptRepository(
                 self.db
             ).get_current_content_by_id(config.system_prompt_id)
 
-        messages, user_prompt = _split_messages(payload.messages)
+        caller_system_prompts, messages, user_prompt = _split_messages(payload.messages)
+        system_prompt_content = _merge_system_prompts(
+            config_system_prompt, caller_system_prompts
+        )
 
         toolsets = self._build_toolsets(config, tools, user_id)
 
@@ -111,13 +114,16 @@ class CreateCompletionCommand:
 
         model = build_model(config, project_id, request_id, user_id=user_id)
 
-        system_prompt_content = None
+        config_system_prompt = None
         if config.system_prompt_id is not None:
-            system_prompt_content = SystemPromptRepository(
+            config_system_prompt = SystemPromptRepository(
                 self.db
             ).get_current_content_by_id(config.system_prompt_id)
 
-        messages, user_prompt = _split_messages(payload.messages)
+        caller_system_prompts, messages, user_prompt = _split_messages(payload.messages)
+        system_prompt_content = _merge_system_prompts(
+            config_system_prompt, caller_system_prompts
+        )
 
         toolsets = self._build_toolsets(config, tools, user_id)
 
@@ -162,11 +168,30 @@ class CreateCompletionCommand:
 
 
 def _split_messages(messages):
-    """Split OpenAI messages into pydantic-ai history + final user prompt."""
+    """Split OpenAI messages into caller system prompts, pydantic-ai history
+    and the final user prompt.
+
+    System messages are collected separately (wherever they appear) so they
+    can be merged with the model config's own system prompt instead of being
+    silently dropped.
+    """
+    system_prompts = []
     history = []
     for msg in messages[:-1]:
-        if msg.role == "user":
+        if msg.role == "system":
+            if msg.content:
+                system_prompts.append(msg.content)
+        elif msg.role == "user":
             history.append(ModelRequest(parts=[UserPromptPart(content=msg.content)]))
         elif msg.role == "assistant":
             history.append(ModelResponse(parts=[TextPart(content=msg.content)]))
-    return history, messages[-1].content
+    return system_prompts, history, messages[-1].content
+
+
+def _merge_system_prompts(config_system_prompt, caller_system_prompts):
+    """Config prompt first (operator-level instructions), then the caller's
+    system messages in request order. Returns None when there is nothing."""
+    parts = [p for p in [config_system_prompt, *caller_system_prompts] if p]
+    if not parts:
+        return None
+    return "\n\n".join(parts)

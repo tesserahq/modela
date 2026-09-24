@@ -73,8 +73,8 @@ def mock_agent_run():
         "app.inference.agent_runner.Agent.run",
         new_callable=AsyncMock,
         return_value=_mock_agent_run(),
-    ):
-        yield
+    ) as m:
+        yield m
 
 
 def test_completion_valid_slug(client: TestClient, default_config):
@@ -189,6 +189,29 @@ def test_completion_with_system_prompt(client: TestClient, config_with_system_pr
     )
 
     assert response.status_code == 200
+
+
+def test_completion_forwards_caller_system_message_after_config_prompt(
+    client: TestClient, config_with_system_prompt, mock_agent_run
+):
+    response = client.post(
+        "/chat/completions",
+        json={
+            "model": config_with_system_prompt.slug,
+            "messages": [
+                {"role": "system", "content": "Current app context: acc_123"},
+                {"role": "user", "content": "Hello"},
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+    history = mock_agent_run.call_args.kwargs["message_history"]
+    system_part = history[0].parts[0]
+    assert system_part.part_kind == "system-prompt"
+    assert system_part.content == (
+        "You are a concise assistant.\n\nCurrent app context: acc_123"
+    )
 
 
 def test_completion_usage_in_response(client: TestClient, default_config):
