@@ -62,7 +62,7 @@ mako = "^1.4.1"
 faststream = {extras = ["nats"], version = "^0.7.5"}
 
 pydantic = {extras = ["email"], version = "^2.11.3"}
-pydantic-ai = {extras = ["openai"], version = "^1.89.1"}
+pydantic-ai = {extras = ["openai"], version = "^2.0.0"}
 pydantic-settings = "^2.9.1"
 
 fastmcp = "^3.3.1"
