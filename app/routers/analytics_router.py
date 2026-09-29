@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.auth.rbac import build_rbac_dependencies, infer_domain
-from app.db import get_db
+from app.db import DbSession
 from app.repositories.completion_request_repository import CompletionRequestRepository
 from app.schemas.completion_request import CostSummaryItem
 from app.services.cost_analytics import attach_group_details
@@ -25,6 +25,7 @@ GroupByDimension = Literal["user", "provider", "model", "project_id"]
     dependencies=[Depends(_rbac["read"]), Depends(get_current_user)],
 )
 def get_cost_summary(
+    db: DbSession,
     group_by: GroupByDimension = Query(...),
     start_date: Optional[date] = Query(default=None),
     end_date: Optional[date] = Query(default=None),
@@ -33,7 +34,6 @@ def get_cost_summary(
     model: Optional[str] = Query(default=None),
     created_by_id: Optional[UUID] = Query(default=None),
     limit: int = Query(default=10, ge=1, le=100),
-    db: Session = Depends(get_db),
 ):
     query = CompletionRequestRepository(db).cost_summary_query(
         group_by=group_by,

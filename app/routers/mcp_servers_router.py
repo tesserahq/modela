@@ -15,7 +15,7 @@ from app.commands.mcp_servers import (
     RefreshMcpServerToolsCommand,
     UpdateMcpServerCommand,
 )
-from app.db import get_db
+from app.db import DbSession
 from app.models.mcp_server import MCPServer
 from app.routers.utils.dependencies import get_mcp_server_by_id
 from app.schemas.mcp_server import (
@@ -50,10 +50,10 @@ rbac = build_rbac_dependencies(
 
 @router.get("", response_model=Page[MCPServerRead])
 def list_mcp_servers(
+    db: DbSession,
     params: Params = Depends(),
     _authorized: bool = Depends(rbac["read"]),
     _current_user=Depends(get_current_user),
-    db: Session = Depends(get_db),
 ) -> Page[MCPServerRead]:
     """List all MCP servers with pagination."""
     svc = MCPServerRepository(db)
@@ -64,9 +64,9 @@ def list_mcp_servers(
 @router.post("", response_model=MCPServerRead, status_code=201)
 def create_mcp_server(
     data: MCPServerCreate,
+    db: DbSession,
     _authorized: bool = Depends(rbac["create"]),
     _current_user=Depends(get_current_user),
-    db: Session = Depends(get_db),
 ) -> MCPServerRead:
     """Create a new MCP server."""
     command = CreateMcpServerCommand(db)
@@ -89,10 +89,10 @@ def get_mcp_server(
 @router.patch("/{id}", response_model=MCPServerRead)
 def update_mcp_server(
     data: MCPServerUpdate,
+    db: DbSession,
     mcp_server: MCPServer = Depends(get_mcp_server_by_id),
     _authorized: bool = Depends(rbac["update"]),
     _current_user=Depends(get_current_user),
-    db: Session = Depends(get_db),
 ) -> MCPServerRead:
     """Update an MCP server."""
     command = UpdateMcpServerCommand(db)
@@ -110,10 +110,10 @@ def update_mcp_server(
     response_model=MCPToolsListResponse,
 )
 async def list_mcp_server_tools(
+    db: DbSession,
     mcp_server: MCPServer = Depends(get_mcp_server_by_id),
     _authorized: bool = Depends(rbac["read"]),
     _current_user=Depends(get_current_user),
-    db: Session = Depends(get_db),
 ) -> MCPToolsListResponse:
     """List the tool catalog for this MCP server (cached, unless expired)."""
     credential_svc = CredentialApplier(db)
@@ -134,10 +134,10 @@ async def list_mcp_server_tools(
     response_model=MCPToolsRefreshResponse,
 )
 async def refresh_mcp_server_tools(
+    db: DbSession,
     mcp_server: MCPServer = Depends(get_mcp_server_by_id),
     _authorized: bool = Depends(rbac["update"]),
     _current_user=Depends(get_current_user),
-    db: Session = Depends(get_db),
 ) -> MCPToolsRefreshResponse:
     """Force-refresh the tool catalog for this MCP server."""
     command = RefreshMcpServerToolsCommand(db)
@@ -149,10 +149,10 @@ async def refresh_mcp_server_tools(
 
 @router.delete("/{id}", status_code=204)
 def delete_mcp_server(
+    db: DbSession,
     mcp_server: MCPServer = Depends(get_mcp_server_by_id),
     _authorized: bool = Depends(rbac["delete"]),
     _current_user=Depends(get_current_user),
-    db: Session = Depends(get_db),
 ) -> None:
     """Soft delete an MCP server."""
     command = DeleteMcpServerCommand(db)

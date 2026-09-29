@@ -54,14 +54,14 @@ class UserRepository(SoftDeleteRepository[User]):
     def create_user(self, user: UserCreate) -> User:
         db_user = User(**user.model_dump())
         self.db.add(db_user)
-        self.db.commit()
+        self.db.flush()
         self.db.refresh(db_user)
         return db_user
 
     def onboard_user(self, user: UserOnboard) -> User:
         db_user = User(**user.model_dump())
         self.db.add(db_user)
-        self.db.commit()
+        self.db.flush()
         self.db.refresh(db_user)
         return db_user
 
@@ -71,7 +71,7 @@ class UserRepository(SoftDeleteRepository[User]):
             update_data = user.model_dump(exclude_unset=True)
             for key, value in update_data.items():
                 setattr(db_user, key, value)
-            self.db.commit()
+            self.db.flush()
             self.db.refresh(db_user)
         return db_user
 
@@ -104,7 +104,7 @@ class UserRepository(SoftDeleteRepository[User]):
         if db_user:
             db_user.verified = True
             db_user.verified_at = datetime.now(timezone.utc)
-            self.db.commit()
+            self.db.flush()
             self.db.refresh(db_user)
         return db_user
 

@@ -13,6 +13,7 @@ from app.services.mcp.catalog import ToolCatalog
 from app.models.mcp_server import MCPServer
 from app.schemas.mcp_server import MCPServerUpdate
 from app.repositories.mcp_server_repository import MCPServerRepository
+from app.db import on_commit
 from tessera_sdk.infra.events.nats_router import NatsEventPublisher  # type: ignore[import-untyped]
 
 
@@ -71,9 +72,15 @@ class UpdateMcpServerCommand:
                 "Publishing mcp-server-updated event to NATS: %s",
                 event.model_dump_json(),
             )
-            try:
-                self.nats_publisher.publish_sync(event, event.event_type)
-            except Exception:  # pragma: no cover - defensive logging
-                self.logger.exception(
-                    "Failed to publish mcp-server-updated event to NATS"
-                )
+            publisher = self.nats_publisher
+
+            def publish() -> None:
+                try:
+                    publisher.publish_sync(event, event.event_type)
+                except Exception:  # pragma: no cover - defensive logging
+                    self.logger.exception(
+                        "Failed to publish mcp-server-updated event to NATS"
+                    )
+
+            # Dispatch only after the transaction commits; dropped on rollback.
+            on_commit(publish)

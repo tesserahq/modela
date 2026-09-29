@@ -14,7 +14,7 @@ from app.commands.knowledge_documents import (
     DeleteKnowledgeDocumentCommand,
     UpdateKnowledgeDocumentCommand,
 )
-from app.db import get_db
+from app.db import DbSession
 from app.models.knowledge_document import KnowledgeDocument
 from app.repositories.knowledge_document_repository import KnowledgeDocumentRepository
 from app.routers.utils.dependencies import get_knowledge_document_by_id
@@ -46,9 +46,9 @@ rbac = build_rbac_dependencies(
 
 @router.get("", response_model=Page[KnowledgeDocumentRead])
 def list_knowledge_documents(
+    db: DbSession,
     _authorized: bool = Depends(rbac["read"]),
     _current_user=Depends(get_current_user),
-    db: Session = Depends(get_db),
 ) -> Page[KnowledgeDocumentRead]:
     """List all knowledge documents with pagination."""
     repo = KnowledgeDocumentRepository(db)
@@ -58,9 +58,9 @@ def list_knowledge_documents(
 @router.post("", response_model=KnowledgeDocumentRead, status_code=201)
 def create_knowledge_document(
     data: KnowledgeDocumentCreate,
+    db: DbSession,
     _authorized: bool = Depends(rbac["create"]),
     _current_user=Depends(get_current_user),
-    db: Session = Depends(get_db),
 ) -> KnowledgeDocumentRead:
     """Create a knowledge document. Chunking/embedding is enqueued asynchronously."""
     command = CreateKnowledgeDocumentCommand(db)
@@ -80,10 +80,10 @@ def get_knowledge_document(
 @router.put("/{id}", response_model=KnowledgeDocumentRead)
 def update_knowledge_document(
     data: KnowledgeDocumentUpdate,
+    db: DbSession,
     document: KnowledgeDocument = Depends(get_knowledge_document_by_id),
     _authorized: bool = Depends(rbac["update"]),
     _current_user=Depends(get_current_user),
-    db: Session = Depends(get_db),
 ) -> KnowledgeDocumentRead:
     """Update a knowledge document. Re-indexing is enqueued only when content changed."""
     command = UpdateKnowledgeDocumentCommand(db)
@@ -92,10 +92,10 @@ def update_knowledge_document(
 
 @router.delete("/{id}", status_code=204)
 def delete_knowledge_document(
+    db: DbSession,
     document: KnowledgeDocument = Depends(get_knowledge_document_by_id),
     _authorized: bool = Depends(rbac["delete"]),
     _current_user=Depends(get_current_user),
-    db: Session = Depends(get_db),
 ) -> None:
     """Hard-delete a knowledge document and its chunks (synchronous)."""
     command = DeleteKnowledgeDocumentCommand(db)

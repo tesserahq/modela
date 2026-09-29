@@ -51,7 +51,6 @@ def create_app(testing: bool = False, auth_middleware=None) -> FastAPI:
 
     if not testing and not settings.disable_auth:
         logger.info("Main: Adding authentication middleware")
-        from tessera_sdk.infra.service_factory import create_service_factory
         from tessera_sdk.server.middleware.authentication import (
             AuthenticationMiddleware,
         )
@@ -59,10 +58,10 @@ def create_app(testing: bool = False, auth_middleware=None) -> FastAPI:
             UserOnboardingMiddleware,
         )
 
-        from app.repositories.user_repository import UserRepository
+        from app.services.sdk_user_service import create_sdk_user_service
 
-        # Create service factory for UserRepository
-        user_service_factory = create_service_factory(UserRepository, db_manager)
+        # Each SDK call runs in its own managed session.
+        user_service_factory = create_sdk_user_service
 
         app.add_middleware(
             UserOnboardingMiddleware,

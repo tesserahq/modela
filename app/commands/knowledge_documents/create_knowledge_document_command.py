@@ -9,6 +9,7 @@ from app.repositories.knowledge_document_repository import KnowledgeDocumentRepo
 from app.schemas.knowledge_document import KnowledgeDocumentCreate
 from app.services.knowledge.frontmatter import split_frontmatter
 from app.tasks.index_knowledge_document import index_knowledge_document_task
+from app.db import on_commit
 
 
 class CreateKnowledgeDocumentCommand:
@@ -19,7 +20,8 @@ class CreateKnowledgeDocumentCommand:
     def execute(self, data: KnowledgeDocumentCreate) -> KnowledgeDocument:
         metadata, body = split_frontmatter(data.raw_content)
         record = self.repo.create(title=data.title, content=body, metadata=metadata)
-        # Enqueue only after create() has committed, so the worker can never
+        # Enqueue only after the transaction commits, so the worker can never
         # pick up the task before the row is visible to its own DB session.
-        index_knowledge_document_task.delay(str(record.id))
+        document_id = str(record.id)
+        on_commit(lambda: index_knowledge_document_task.delay(document_id))
         return record

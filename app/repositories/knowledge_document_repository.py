@@ -6,16 +6,17 @@ from __future__ import annotations
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import Select, select
+from sqlalchemy import Select, delete, select
 from sqlalchemy.orm import Session
+from tessera_sdk.infra.repository import Repository
 
 from app.models.knowledge_chunk import KnowledgeChunk
 from app.models.knowledge_document import KnowledgeDocument
 
 
-class KnowledgeDocumentRepository:
+class KnowledgeDocumentRepository(Repository):
     def __init__(self, db: Session) -> None:
-        self.db = db
+        super().__init__(db)
 
     def get_by_id(self, id: UUID) -> KnowledgeDocument | None:
         return (
@@ -30,7 +31,7 @@ class KnowledgeDocumentRepository:
     ) -> KnowledgeDocument:
         record = KnowledgeDocument(title=title, content=content, extended_info=metadata)
         self.db.add(record)
-        self.db.commit()
+        self.db.flush()
         self.db.refresh(record)
         return record
 
@@ -47,17 +48,17 @@ class KnowledgeDocumentRepository:
         if content is not None:
             record.content = content
             record.extended_info = metadata or {}
-        self.db.commit()
+        self.db.flush()
         self.db.refresh(record)
         return record
 
     def delete(self, record: KnowledgeDocument) -> None:
         """Hard delete. The document_id FK's ON DELETE CASCADE removes chunks."""
         self.db.delete(record)
-        self.db.commit()
+        self.db.flush()
 
     def delete_chunks_for_document(self, document_id: UUID) -> None:
         """Stage chunk deletion in the caller's current transaction."""
-        self.db.query(KnowledgeChunk).filter(
-            KnowledgeChunk.document_id == document_id
-        ).delete()
+        self._execute_mutation(
+            delete(KnowledgeChunk).where(KnowledgeChunk.document_id == document_id)
+        )

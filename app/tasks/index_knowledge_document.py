@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from app.db import SessionLocal
+from app.db import session_scope
 from app.inference.adapters.registry import get_adapter
 from app.infra.celery_app import celery_app
 from app.infra.logging_config import get_logger
@@ -23,58 +23,66 @@ def index_knowledge_document_task(document_id: str) -> None:
     exists, so the failure is visible in Celery monitoring/logs instead of
     leaving a document permanently unindexed with no operator-visible error.
     """
-    db = SessionLocal()
     try:
-        doc_repo = KnowledgeDocumentRepository(db)
-        document = doc_repo.get_by_id(UUID(document_id))
-        if document is None:
-            # Deleted before the task ran; nothing to index.
-            return
+        # Phase 1: read the document and the embedding configuration.
+        with session_scope() as db:
+            document = KnowledgeDocumentRepository(db).get_by_id(UUID(document_id))
+            if document is None:
+                # Deleted before the task ran; nothing to index.
+                return
+            content = document.content
 
-        embedding_config = ModelConfigRepository(db).get_default_for_type("embedding")
-        if embedding_config is None:
-            raise RuntimeError(
-                "No default 'embedding' ModelConfig is configured; cannot index "
-                f"KnowledgeDocument '{document_id}'"
+            embedding_config = ModelConfigRepository(db).get_default_for_type(
+                "embedding"
             )
+            if embedding_config is None:
+                raise RuntimeError(
+                    "No default 'embedding' ModelConfig is configured; cannot index "
+                    f"KnowledgeDocument '{document_id}'"
+                )
+            embedding_config_id = embedding_config.id
+            provider = embedding_config.provider
+            model = embedding_config.model
+            params = EmbeddingConfigParams.model_validate(embedding_config.params or {})
 
-        params = EmbeddingConfigParams.model_validate(embedding_config.params or {})
+        # Phase 2: chunk and embed, with no database transaction open.
         chunks = chunk_text(
-            document.content,
+            content,
             chunk_size=params.chunk_size,
             chunk_overlap=params.chunk_overlap,
             strategy=params.strategy,
         )
         vectors: list[list[float]] = []
         if chunks:
-            adapter = get_adapter(embedding_config.provider)
-            vectors = adapter.create_embeddings(embedding_config.model, chunks)
+            vectors = get_adapter(provider).create_embeddings(model, chunks)
             if len(vectors) != len(chunks):
                 raise RuntimeError(
                     "Embedding provider returned "
                     f"{len(vectors)} vectors for {len(chunks)} chunks"
                 )
 
-        # Preserve the currently usable index until configuration validation,
-        # chunking, and the external provider call have all succeeded. The
-        # deletion and replacement insert commit as one transaction below.
-        doc_repo.delete_chunks_for_document(document.id)
-        chunk_params_snapshot = params.model_dump()
-        for index, (text, vector) in enumerate(zip(chunks, vectors)):
-            db.add(
-                KnowledgeChunk(
-                    document_id=document.id,
-                    chunk_index=index,
-                    content=text,
-                    embedding=vector,
-                    embedding_config_id=embedding_config.id,
-                    chunk_params=chunk_params_snapshot,
+        # Phase 3: replace the chunks. The currently usable index is kept until
+        # configuration validation, chunking and the provider call have all
+        # succeeded; deletion and replacement commit as one transaction.
+        with session_scope() as db:
+            doc_repo = KnowledgeDocumentRepository(db)
+            document = doc_repo.get_by_id(UUID(document_id))
+            if document is None:
+                # Deleted while embedding; nothing to store.
+                return
+            doc_repo.delete_chunks_for_document(document.id)
+            chunk_params_snapshot = params.model_dump()
+            for index, (text, vector) in enumerate(zip(chunks, vectors)):
+                db.add(
+                    KnowledgeChunk(
+                        document_id=document.id,
+                        chunk_index=index,
+                        content=text,
+                        embedding=vector,
+                        embedding_config_id=embedding_config_id,
+                        chunk_params=chunk_params_snapshot,
+                    )
                 )
-            )
-        db.commit()
     except Exception:
         logger.exception(f"Failed to index knowledge document {document_id}")
-        db.rollback()
         raise
-    finally:
-        db.close()

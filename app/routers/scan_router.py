@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.auth.rbac import build_rbac_dependencies, infer_project
 from app.commands.scan.create_scan_command import CreateScanCommand
-from app.db import get_db
+from app.db import DbSession
 from app.schemas.scan import ScanFileRequest, ScanResponse
 from tessera_sdk.server.dependencies.auth import get_current_user
 
@@ -20,8 +20,8 @@ _rbac = build_rbac_dependencies(resource=RBAC_RESOURCE, project_resolver=infer_p
 )
 async def scan_file(
     payload: ScanFileRequest,
+    db: DbSession,
     project_id: str = Depends(infer_project),
-    db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
     request_id = str(uuid.uuid4())

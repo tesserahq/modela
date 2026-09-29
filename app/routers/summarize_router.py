@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.auth.rbac import build_rbac_dependencies, infer_project
 from app.commands.summarize.create_summarize_command import CreateSummarizeCommand
-from app.db import get_db
+from app.db import DbSession
 from app.schemas.summarize import (
     SummarizeFileRequest,
     SummarizeResponse,
@@ -24,8 +24,8 @@ _rbac = build_rbac_dependencies(resource=RBAC_RESOURCE, project_resolver=infer_p
 )
 async def summarize_text(
     payload: SummarizeTextRequest,
+    db: DbSession,
     project_id: str = Depends(infer_project),
-    db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
     request_id = str(uuid.uuid4())
@@ -45,8 +45,8 @@ async def summarize_text(
 )
 async def summarize_file(
     payload: SummarizeFileRequest,
+    db: DbSession,
     project_id: str = Depends(infer_project),
-    db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
     request_id = str(uuid.uuid4())

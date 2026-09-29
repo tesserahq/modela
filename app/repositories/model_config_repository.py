@@ -73,7 +73,7 @@ class ModelConfigRepository(SoftDeleteRepository[ModelConfig]):
             self._clear_default(config_type=data.get("config_type", "chat"))
         record = ModelConfig(**data)
         self.db.add(record)
-        self.db.commit()
+        self.db.flush()
         self.db.refresh(record)
         return record
 
@@ -83,7 +83,7 @@ class ModelConfigRepository(SoftDeleteRepository[ModelConfig]):
             self._clear_default(config_type=config_type, exclude_id=record.id)
         for key, value in data.items():
             setattr(record, key, value)
-        self.db.commit()
+        self.db.flush()
         self.db.refresh(record)
         return record
 

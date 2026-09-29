@@ -14,7 +14,7 @@ class CompletionRequestRepository:
     def create(self, data: CompletionRequestCreate) -> CompletionRequest:
         record = CompletionRequest(**data.model_dump())
         self.db.add(record)
-        self.db.commit()
+        self.db.flush()
         self.db.refresh(record)
         return record
 

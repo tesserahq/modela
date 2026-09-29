@@ -98,7 +98,7 @@ class MCPServerRepository(SoftDeleteRepository[MCPServer]):
             extended_info=data.extended_info,
         )
         self.db.add(mcp_server)
-        self.db.commit()
+        self.db.flush()
         self.db.refresh(mcp_server)
         return mcp_server
 
@@ -121,7 +121,7 @@ class MCPServerRepository(SoftDeleteRepository[MCPServer]):
         for key, value in update_data.items():
             setattr(mcp_server, key, value)
 
-        self.db.commit()
+        self.db.flush()
         self.db.refresh(mcp_server)
         return mcp_server
 

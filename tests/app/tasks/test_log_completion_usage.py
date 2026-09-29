@@ -4,6 +4,7 @@ from uuid import uuid4
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from tessera_sdk.testing import execution_boundary
 
 from app.models.completion_request import CompletionRequest
 from app.tasks.log_completion_usage import log_completion_usage
@@ -24,9 +25,11 @@ def _run_task(db: Session, **overrides):
     )
     defaults.update(overrides)
 
-    with patch("app.tasks.log_completion_usage.SessionLocal", return_value=db):
-        with patch.object(db, "close"):
-            log_completion_usage(**defaults)
+    with patch(
+        "app.tasks.log_completion_usage.session_scope",
+        lambda: execution_boundary(db),
+    ):
+        log_completion_usage(**defaults)
 
     return defaults["request_id"]
 
