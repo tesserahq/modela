@@ -22,7 +22,12 @@ _rbac = build_rbac_dependencies(resource=RBAC_RESOURCE, project_resolver=infer_p
     response_model=SummarizeResponse,
     dependencies=[Depends(_rbac["create"])],
 )
-async def summarize_text(payload: SummarizeTextRequest, db: DbSession, project_id: str = Depends(infer_project), current_user = Depends(get_current_user)):
+async def summarize_text(
+    payload: SummarizeTextRequest,
+    db: DbSession,
+    project_id: str = Depends(infer_project),
+    current_user=Depends(get_current_user),
+):
     request_id = str(uuid.uuid4())
     return await CreateSummarizeCommand(db).execute_text(
         content=payload.content,
@@ -38,7 +43,12 @@ async def summarize_text(payload: SummarizeTextRequest, db: DbSession, project_i
     response_model=SummarizeResponse,
     dependencies=[Depends(_rbac["create"])],
 )
-async def summarize_file(payload: SummarizeFileRequest, db: DbSession, project_id: str = Depends(infer_project), current_user = Depends(get_current_user)):
+async def summarize_file(
+    payload: SummarizeFileRequest,
+    db: DbSession,
+    project_id: str = Depends(infer_project),
+    current_user=Depends(get_current_user),
+):
     request_id = str(uuid.uuid4())
     return await CreateSummarizeCommand(db).execute_file(
         file_url=payload.file_url,

@@ -88,7 +88,11 @@ def get_model_config(config: ModelConfig = Depends(get_model_config_by_id)):
     response_model=ModelConfigResponse,
     dependencies=[Depends(_rbac["update"]), Depends(get_current_user)],
 )
-def update_model_config(payload: ModelConfigUpdate, db: DbSession, config: ModelConfig = Depends(get_model_config_by_id)):
+def update_model_config(
+    payload: ModelConfigUpdate,
+    db: DbSession,
+    config: ModelConfig = Depends(get_model_config_by_id),
+):
     return UpdateModelConfigCommand(db).execute(config, payload)
 
 
@@ -97,7 +101,9 @@ def update_model_config(payload: ModelConfigUpdate, db: DbSession, config: Model
     status_code=status.HTTP_204_NO_CONTENT,
     dependencies=[Depends(_rbac["delete"]), Depends(get_current_user)],
 )
-def delete_model_config(db: DbSession, config: ModelConfig = Depends(get_model_config_by_id)):
+def delete_model_config(
+    db: DbSession, config: ModelConfig = Depends(get_model_config_by_id)
+):
     DeleteModelConfigCommand(db).execute(config)
 
 
@@ -106,7 +112,11 @@ def delete_model_config(db: DbSession, config: ModelConfig = Depends(get_model_c
     status_code=status.HTTP_200_OK,
     dependencies=[Depends(_rbac["update"]), Depends(get_current_user)],
 )
-def attach_mcp_server(payload: MCPServerAttachRequest, db: DbSession, config: ModelConfig = Depends(get_model_config_by_id)):
+def attach_mcp_server(
+    payload: MCPServerAttachRequest,
+    db: DbSession,
+    config: ModelConfig = Depends(get_model_config_by_id),
+):
     server = MCPServerRepository(db).get_mcp_server(payload.server_id)
     if server is None:
         raise ResourceNotFoundError(f"MCPServer '{payload.server_id}' not found")
@@ -120,7 +130,11 @@ def attach_mcp_server(payload: MCPServerAttachRequest, db: DbSession, config: Mo
     status_code=status.HTTP_204_NO_CONTENT,
     dependencies=[Depends(_rbac["update"]), Depends(get_current_user)],
 )
-def detach_mcp_server(server_id: UUID, db: DbSession, config: ModelConfig = Depends(get_model_config_by_id)):
+def detach_mcp_server(
+    server_id: UUID,
+    db: DbSession,
+    config: ModelConfig = Depends(get_model_config_by_id),
+):
     server = next((s for s in config.mcp_servers if s.id == server_id), None)
     if server is None:
         raise ResourceNotFoundError(
@@ -134,6 +148,8 @@ def detach_mcp_server(server_id: UUID, db: DbSession, config: ModelConfig = Depe
     response_model=Page[MCPServerRead],
     dependencies=[Depends(_rbac["read"]), Depends(get_current_user)],
 )
-def list_attached_mcp_servers(db: DbSession, config: ModelConfig = Depends(get_model_config_by_id)):
+def list_attached_mcp_servers(
+    db: DbSession, config: ModelConfig = Depends(get_model_config_by_id)
+):
     query = MCPServerRepository(db).list_query_for_model_config(config.id)
     return paginate(db, query)

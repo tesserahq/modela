@@ -45,14 +45,23 @@ rbac = build_rbac_dependencies(
 
 
 @router.get("", response_model=Page[KnowledgeDocumentRead])
-def list_knowledge_documents(db: DbSession, _authorized: bool = Depends(rbac["read"]), _current_user = Depends(get_current_user)) -> Page[KnowledgeDocumentRead]:
+def list_knowledge_documents(
+    db: DbSession,
+    _authorized: bool = Depends(rbac["read"]),
+    _current_user=Depends(get_current_user),
+) -> Page[KnowledgeDocumentRead]:
     """List all knowledge documents with pagination."""
     repo = KnowledgeDocumentRepository(db)
     return paginate(db, repo.list_query())
 
 
 @router.post("", response_model=KnowledgeDocumentRead, status_code=201)
-def create_knowledge_document(data: KnowledgeDocumentCreate, db: DbSession, _authorized: bool = Depends(rbac["create"]), _current_user = Depends(get_current_user)) -> KnowledgeDocumentRead:
+def create_knowledge_document(
+    data: KnowledgeDocumentCreate,
+    db: DbSession,
+    _authorized: bool = Depends(rbac["create"]),
+    _current_user=Depends(get_current_user),
+) -> KnowledgeDocumentRead:
     """Create a knowledge document. Chunking/embedding is enqueued asynchronously."""
     command = CreateKnowledgeDocumentCommand(db)
     return command.execute(data)
@@ -69,14 +78,25 @@ def get_knowledge_document(
 
 
 @router.put("/{id}", response_model=KnowledgeDocumentRead)
-def update_knowledge_document(data: KnowledgeDocumentUpdate, db: DbSession, document: KnowledgeDocument = Depends(get_knowledge_document_by_id), _authorized: bool = Depends(rbac["update"]), _current_user = Depends(get_current_user)) -> KnowledgeDocumentRead:
+def update_knowledge_document(
+    data: KnowledgeDocumentUpdate,
+    db: DbSession,
+    document: KnowledgeDocument = Depends(get_knowledge_document_by_id),
+    _authorized: bool = Depends(rbac["update"]),
+    _current_user=Depends(get_current_user),
+) -> KnowledgeDocumentRead:
     """Update a knowledge document. Re-indexing is enqueued only when content changed."""
     command = UpdateKnowledgeDocumentCommand(db)
     return command.execute(document, data)
 
 
 @router.delete("/{id}", status_code=204)
-def delete_knowledge_document(db: DbSession, document: KnowledgeDocument = Depends(get_knowledge_document_by_id), _authorized: bool = Depends(rbac["delete"]), _current_user = Depends(get_current_user)) -> None:
+def delete_knowledge_document(
+    db: DbSession,
+    document: KnowledgeDocument = Depends(get_knowledge_document_by_id),
+    _authorized: bool = Depends(rbac["delete"]),
+    _current_user=Depends(get_current_user),
+) -> None:
     """Hard-delete a knowledge document and its chunks (synchronous)."""
     command = DeleteKnowledgeDocumentCommand(db)
     command.execute(document)

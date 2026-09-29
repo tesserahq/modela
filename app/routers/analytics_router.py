@@ -24,7 +24,17 @@ GroupByDimension = Literal["user", "provider", "model", "project_id"]
     response_model=list[CostSummaryItem],
     dependencies=[Depends(_rbac["read"]), Depends(get_current_user)],
 )
-def get_cost_summary(db: DbSession, group_by: GroupByDimension = Query(...), start_date: Optional[date] = Query(default=None), end_date: Optional[date] = Query(default=None), project_id: Optional[str] = Query(default=None), provider: Optional[str] = Query(default=None), model: Optional[str] = Query(default=None), created_by_id: Optional[UUID] = Query(default=None), limit: int = Query(default=10, ge=1, le=100)):
+def get_cost_summary(
+    db: DbSession,
+    group_by: GroupByDimension = Query(...),
+    start_date: Optional[date] = Query(default=None),
+    end_date: Optional[date] = Query(default=None),
+    project_id: Optional[str] = Query(default=None),
+    provider: Optional[str] = Query(default=None),
+    model: Optional[str] = Query(default=None),
+    created_by_id: Optional[UUID] = Query(default=None),
+    limit: int = Query(default=10, ge=1, le=100),
+):
     query = CompletionRequestRepository(db).cost_summary_query(
         group_by=group_by,
         start_date=start_date,

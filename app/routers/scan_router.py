@@ -18,7 +18,12 @@ _rbac = build_rbac_dependencies(resource=RBAC_RESOURCE, project_resolver=infer_p
     response_model=ScanResponse,
     dependencies=[Depends(_rbac["create"])],
 )
-async def scan_file(payload: ScanFileRequest, db: DbSession, project_id: str = Depends(infer_project), current_user = Depends(get_current_user)):
+async def scan_file(
+    payload: ScanFileRequest,
+    db: DbSession,
+    project_id: str = Depends(infer_project),
+    current_user=Depends(get_current_user),
+):
     request_id = str(uuid.uuid4())
     return await CreateScanCommand(db).execute_file(
         file_url=payload.file_url,

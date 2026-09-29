@@ -43,9 +43,7 @@ def index_knowledge_document_task(document_id: str) -> None:
             embedding_config_id = embedding_config.id
             provider = embedding_config.provider
             model = embedding_config.model
-            params = EmbeddingConfigParams.model_validate(
-                embedding_config.params or {}
-            )
+            params = EmbeddingConfigParams.model_validate(embedding_config.params or {})
 
         # Phase 2: chunk and embed, with no database transaction open.
         chunks = chunk_text(

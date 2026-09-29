@@ -21,7 +21,9 @@ _rbac = build_rbac_dependencies(resource=RBAC_RESOURCE, domain_resolver=infer_do
     response_model=Page[CompletionRequestResponse],
     dependencies=[Depends(_rbac["read"]), Depends(get_current_user)],
 )
-def list_completion_requests(db: DbSession, project_id: Optional[str] = Query(default=None)):
+def list_completion_requests(
+    db: DbSession, project_id: Optional[str] = Query(default=None)
+):
     query = CompletionRequestRepository(db).list_query(project_id=project_id)
     return paginate(db, query)
 
