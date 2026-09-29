@@ -34,7 +34,6 @@ class CreateModelConfigCommand:
             record = self.model_config_repository.create(data.model_dump())
             return ModelConfigResponse.model_validate(record)
         except IntegrityError:
-            self.db.rollback()
             raise ConflictError(
                 f"A model config with slug '{data.slug}' already exists."
             )

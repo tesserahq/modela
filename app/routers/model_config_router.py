@@ -20,7 +20,7 @@ from app.commands.model_configs.update_model_config_command import (
 from app.commands.model_configs.delete_model_config_command import (
     DeleteModelConfigCommand,
 )
-from app.db import get_db
+from app.db import DbSession
 from app.exceptions.resource_not_found_error import ResourceNotFoundError
 from app.models.model_config import ModelConfig
 from app.repositories.mcp_server_repository import MCPServerRepository
@@ -50,7 +50,7 @@ _rbac = build_rbac_dependencies(resource=RBAC_RESOURCE, domain_resolver=infer_do
 )
 def create_model_config(
     payload: ModelConfigCreate,
-    db: Session = Depends(get_db),
+    db: DbSession,
 ):
     return CreateModelConfigCommand(db).execute(payload)
 
@@ -60,7 +60,7 @@ def create_model_config(
     response_model=Page[ModelConfigResponse],
     dependencies=[Depends(_rbac["read"]), Depends(get_current_user)],
 )
-def list_model_configs(db: Session = Depends(get_db)):
+def list_model_configs(db: DbSession):
     query = ModelConfigRepository(db).list_query()
     return paginate(db, query)
 
@@ -88,11 +88,7 @@ def get_model_config(config: ModelConfig = Depends(get_model_config_by_id)):
     response_model=ModelConfigResponse,
     dependencies=[Depends(_rbac["update"]), Depends(get_current_user)],
 )
-def update_model_config(
-    payload: ModelConfigUpdate,
-    config: ModelConfig = Depends(get_model_config_by_id),
-    db: Session = Depends(get_db),
-):
+def update_model_config(payload: ModelConfigUpdate, db: DbSession, config: ModelConfig = Depends(get_model_config_by_id)):
     return UpdateModelConfigCommand(db).execute(config, payload)
 
 
@@ -101,10 +97,7 @@ def update_model_config(
     status_code=status.HTTP_204_NO_CONTENT,
     dependencies=[Depends(_rbac["delete"]), Depends(get_current_user)],
 )
-def delete_model_config(
-    config: ModelConfig = Depends(get_model_config_by_id),
-    db: Session = Depends(get_db),
-):
+def delete_model_config(db: DbSession, config: ModelConfig = Depends(get_model_config_by_id)):
     DeleteModelConfigCommand(db).execute(config)
 
 
@@ -113,17 +106,12 @@ def delete_model_config(
     status_code=status.HTTP_200_OK,
     dependencies=[Depends(_rbac["update"]), Depends(get_current_user)],
 )
-def attach_mcp_server(
-    payload: MCPServerAttachRequest,
-    config: ModelConfig = Depends(get_model_config_by_id),
-    db: Session = Depends(get_db),
-):
+def attach_mcp_server(payload: MCPServerAttachRequest, db: DbSession, config: ModelConfig = Depends(get_model_config_by_id)):
     server = MCPServerRepository(db).get_mcp_server(payload.server_id)
     if server is None:
         raise ResourceNotFoundError(f"MCPServer '{payload.server_id}' not found")
     if server not in config.mcp_servers:
         config.mcp_servers.append(server)
-        db.commit()
     return {}
 
 
@@ -132,18 +120,13 @@ def attach_mcp_server(
     status_code=status.HTTP_204_NO_CONTENT,
     dependencies=[Depends(_rbac["update"]), Depends(get_current_user)],
 )
-def detach_mcp_server(
-    server_id: UUID,
-    config: ModelConfig = Depends(get_model_config_by_id),
-    db: Session = Depends(get_db),
-):
+def detach_mcp_server(server_id: UUID, db: DbSession, config: ModelConfig = Depends(get_model_config_by_id)):
     server = next((s for s in config.mcp_servers if s.id == server_id), None)
     if server is None:
         raise ResourceNotFoundError(
             f"MCPServer '{server_id}' is not attached to this ModelConfig"
         )
     config.mcp_servers.remove(server)
-    db.commit()
 
 
 @router.get(
@@ -151,9 +134,6 @@ def detach_mcp_server(
     response_model=Page[MCPServerRead],
     dependencies=[Depends(_rbac["read"]), Depends(get_current_user)],
 )
-def list_attached_mcp_servers(
-    config: ModelConfig = Depends(get_model_config_by_id),
-    db: Session = Depends(get_db),
-):
+def list_attached_mcp_servers(db: DbSession, config: ModelConfig = Depends(get_model_config_by_id)):
     query = MCPServerRepository(db).list_query_for_model_config(config.id)
     return paginate(db, query)

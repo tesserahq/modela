@@ -3,6 +3,7 @@ from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
 import pytest
+from tessera_sdk.testing import execution_boundary
 
 from app.models.knowledge_chunk import KnowledgeChunk
 from app.models.model_config import ModelConfig
@@ -39,17 +40,14 @@ def _chunks_for(db, document_id):
 
 @contextmanager
 def _run_task_against(db, adapter=None):
-    """The task opens/closes its own SessionLocal(); redirect that to the
-    shared test session (so writes are visible within this test's
-    transaction), and no-op its db.close() so it doesn't tear down the
-    fixture's session/connection out from under the rest of the test."""
+    """Run each of the task's session_scope() blocks the way production does
+    (commit on success, roll back on error), against the shared test session
+    so its writes are visible to the test."""
     patches = [
-        patch("app.tasks.index_knowledge_document.SessionLocal", return_value=db),
-        patch.object(db, "close"),
-        # Production owns this session and must roll it back on failure. The
-        # test fixture's session is bound to an outer rollback transaction, so
-        # keep task failures from tearing down that fixture boundary.
-        patch.object(db, "rollback"),
+        patch(
+            "app.tasks.index_knowledge_document.session_scope",
+            lambda: execution_boundary(db),
+        ),
     ]
     if adapter is not None:
         patches.append(

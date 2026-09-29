@@ -11,8 +11,4 @@ class DeleteModelConfigCommand:
         self.logger = logging.getLogger(__name__)
 
     def execute(self, record: ModelConfig) -> None:
-        try:
-            self.model_config_repository.delete_record(record.id)
-        except Exception as e:
-            self.db.rollback()
-            raise Exception(f"Failed to delete model config: {str(e)}")
+        self.model_config_repository.delete_record(record.id)

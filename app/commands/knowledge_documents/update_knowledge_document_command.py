@@ -9,6 +9,7 @@ from app.repositories.knowledge_document_repository import KnowledgeDocumentRepo
 from app.schemas.knowledge_document import KnowledgeDocumentUpdate
 from app.services.knowledge.frontmatter import split_frontmatter
 from app.tasks.index_knowledge_document import index_knowledge_document_task
+from app.db import on_commit
 
 
 class UpdateKnowledgeDocumentCommand:
@@ -28,7 +29,9 @@ class UpdateKnowledgeDocumentCommand:
         )
         # A title-only update doesn't touch the embedded content, so it
         # doesn't need to re-chunk/re-embed. Only enqueue when raw_content
-        # was actually part of the payload, and only after the commit above.
+        # was actually part of the payload, and only after the transaction
+        # commits.
         if content_changed:
-            index_knowledge_document_task.delay(str(updated.id))
+            document_id = str(updated.id)
+            on_commit(lambda: index_knowledge_document_task.delay(document_id))
         return updated

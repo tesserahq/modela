@@ -1,6 +1,8 @@
 import json
 import time
 import uuid
+from typing import Annotated
+
 from fastapi import APIRouter, Depends, Response
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
@@ -10,6 +12,14 @@ from app.commands.completions.create_completion_command import CreateCompletionC
 from app.db import get_db
 from app.schemas.completion import CompletionCreate, CompletionResponse
 from tessera_sdk.server.dependencies.auth import get_current_user
+
+# A streamed completion keeps using the session (model config, MCP tool
+# lookups, knowledge search) while the response is being sent, so the session
+# must outlive the route function: FastAPI's default "request" scope ends it
+# after the response. The commit then follows the 2xx, which is inherent to
+# streaming (the status is sent before the body). Every other route uses
+# DbSession, which commits before the response.
+StreamingDbSession = Annotated[Session, Depends(get_db)]
 
 router = APIRouter(tags=["completions"])
 RBAC_RESOURCE = "completion"
@@ -25,8 +35,8 @@ logger = get_logger()
 async def create_completion(
     payload: CompletionCreate,
     response: Response,
+    db: StreamingDbSession,
     project_id: str = Depends(infer_project),
-    db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
     request_id = str(uuid.uuid4())

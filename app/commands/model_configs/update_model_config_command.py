@@ -47,6 +47,5 @@ class UpdateModelConfigCommand:
             )
             return ModelConfigResponse.model_validate(updated)
         except IntegrityError:
-            self.db.rollback()
             slug = data.slug if data.slug is not None else record.slug
             raise ConflictError(f"A model config with slug '{slug}' already exists.")

@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, Query
 from fastapi_pagination import Page
 from fastapi_pagination.ext.sqlalchemy import paginate
 from sqlalchemy.orm import Session
-from app.db import get_db
+from app.db import DbSession
 from app.auth.rbac import build_rbac_dependencies, infer_domain
 from app.models.completion_request import CompletionRequest
 from app.repositories.completion_request_repository import CompletionRequestRepository
@@ -21,10 +21,7 @@ _rbac = build_rbac_dependencies(resource=RBAC_RESOURCE, domain_resolver=infer_do
     response_model=Page[CompletionRequestResponse],
     dependencies=[Depends(_rbac["read"]), Depends(get_current_user)],
 )
-def list_completion_requests(
-    project_id: Optional[str] = Query(default=None),
-    db: Session = Depends(get_db),
-):
+def list_completion_requests(db: DbSession, project_id: Optional[str] = Query(default=None)):
     query = CompletionRequestRepository(db).list_query(project_id=project_id)
     return paginate(db, query)
 
