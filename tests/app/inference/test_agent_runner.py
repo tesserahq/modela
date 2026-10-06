@@ -129,6 +129,53 @@ class TestAgentRunnerRunStream:
         assert tool_calls == [3]
 
     @pytest.mark.asyncio
+    async def test_run_stream_interleaves_drained_events_after_tool_result(self):
+        recorded: list[dict] = []
+        drained = 0
+
+        def lookup(value: int) -> int:
+            # Stands in for an MCP tool recording a committed domain event.
+            recorded.append({"id": "evt-1"})
+            return value * 2
+
+        def drain_events() -> list[dict]:
+            nonlocal drained
+            pending = recorded[drained:]
+            drained = len(recorded)
+            return pending
+
+        class PreambleThenToolModel(TestModel):
+            def _request(self, messages, model_settings, model_request_parameters):
+                if any(
+                    isinstance(part, ToolReturnPart)
+                    for message in messages
+                    for part in message.parts
+                ):
+                    return ModelResponse(parts=[TextPart("final answer")])
+                return ModelResponse(
+                    parts=[
+                        TextPart("preamble"),
+                        ToolCallPart("lookup", {"value": 3}, "call-1"),
+                    ]
+                )
+
+        from app.inference.agent_runner import AgentRunner, StreamedEvent
+
+        items = [
+            item
+            async for item in AgentRunner(PreambleThenToolModel()).run_stream(
+                "go",
+                toolsets=[FunctionToolset([lookup])],
+                drain_events=drain_events,
+            )
+        ]
+
+        event_index = items.index(StreamedEvent({"id": "evt-1"}))
+        assert "".join(items[:event_index]) == "preamble"
+        assert "".join(items[event_index + 1 :]) == "final answer"
+        assert sum(isinstance(item, StreamedEvent) for item in items) == 1
+
+    @pytest.mark.asyncio
     async def test_run_stream_passes_retries_kwarg(self, runner):
         agent = _make_agent_mock(stream_chunks=["chunk"])
 

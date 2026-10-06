@@ -1,4 +1,4 @@
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass
 from typing import Any
 
@@ -33,6 +33,13 @@ class AgentResult:
     )
     input_tokens: int
     output_tokens: int
+
+
+@dataclass(frozen=True)
+class StreamedEvent:
+    """A serialized domain event to interleave with streamed text."""
+
+    payload: dict[str, Any]
 
 
 class AgentRunner:
@@ -107,7 +114,14 @@ class AgentRunner:
         message_history: list[ModelMessage] | None = None,
         toolsets: list[AbstractToolset] | None = None,
         max_result_retries: int | None = None,
-    ) -> AsyncIterator[str]:
+        drain_events: Callable[[], list[dict[str, Any]]] | None = None,
+    ) -> AsyncIterator[str | StreamedEvent]:
+        """Stream text deltas, interleaved with domain events when requested.
+
+        ``drain_events`` returns events recorded since its previous call. It is
+        polled after every agent event, so an event is yielded right after the
+        tool result that produced it, in actual execution order.
+        """
         agent = Agent(model=self._model)
 
         history: list[ModelMessage] = list(message_history) if message_history else []
@@ -137,6 +151,9 @@ class AgentRunner:
         ):
             async with agent.run_stream_events(user_prompt, **run_kwargs) as events:
                 async for event in events:
+                    if drain_events is not None:
+                        for payload in drain_events():
+                            yield StreamedEvent(payload)
                     if isinstance(event, PartStartEvent) and isinstance(
                         event.part, TextPart
                     ):
@@ -148,3 +165,6 @@ class AgentRunner:
                         and event.delta.content_delta
                     ):
                         yield event.delta.content_delta
+            if drain_events is not None:
+                for payload in drain_events():
+                    yield StreamedEvent(payload)

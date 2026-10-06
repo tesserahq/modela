@@ -12,6 +12,7 @@ from pydantic_ai.toolsets import AbstractToolset
 from pydantic_ai.toolsets.abstract import ToolsetTool
 
 from app.schemas.mcp_tool import MCPCatalogTool
+from app.services.mcp.event_collector import CompletionEventCollector
 from app.services.mcp.tool_executor import MCPToolExecutor
 
 # SchemaValidator that accepts any dict; MCP tools validate on the server side.
@@ -33,10 +34,14 @@ class MCPToolset(AbstractToolset[None]):
         *,
         user_id: Optional[UUID] = None,
         tool_id: str = "mcp",
+        event_collector: Optional[CompletionEventCollector] = None,
     ) -> None:
         self._tools = tools
         self._executor = executor
         self._user_id = user_id
+        # Set only when the caller opted into the events channel; otherwise
+        # result metadata is never parsed.
+        self._event_collector = event_collector
         self._tool_id = tool_id
         self._lookup: dict[str, MCPCatalogTool] = {t.qualified_name: t for t in tools}
 
@@ -77,12 +82,18 @@ class MCPToolset(AbstractToolset[None]):
         if catalog_tool is None:
             return {"error": "Tool not found", "reason": f"Unknown tool: {name}"}
 
-        result = await self._executor.execute(
+        result = await self._executor.execute_with_metadata(
             server_id=catalog_tool.server_id,
             original_name=catalog_tool.original_name,
             args=tool_args,
             user_id=self._user_id,
+            parse_metadata=self._event_collector is not None,
         )
-        if isinstance(result, str):
-            return result
-        return json.dumps(result, default=str)
+        if self._event_collector is not None and result.events:
+            self._event_collector.record(result.events, tool_name=name)
+
+        # Only the normal MCP result reaches the model; metadata never does.
+        agent_value = result.agent_value
+        if isinstance(agent_value, str):
+            return agent_value
+        return json.dumps(agent_value, default=str)

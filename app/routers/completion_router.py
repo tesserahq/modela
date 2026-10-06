@@ -10,6 +10,7 @@ from app.infra.logging_config import get_logger
 from app.auth.rbac import build_rbac_dependencies, infer_project
 from app.commands.completions.create_completion_command import CreateCompletionCommand
 from app.db import get_db
+from app.inference import StreamedEvent
 from app.schemas.completion import CompletionCreate, CompletionResponse
 from tessera_sdk.server.dependencies.auth import get_current_user
 
@@ -31,6 +32,9 @@ logger = get_logger()
 @router.post(
     "/chat/completions",
     response_model=CompletionResponse,
+    # `extensions` is set only for opted-in callers; everyone else gets the
+    # unchanged response body.
+    response_model_exclude_unset=True,
 )
 async def create_completion(
     payload: CompletionCreate,
@@ -54,6 +58,20 @@ async def create_completion(
         async def _sse():
             first = True
             async for delta in delta_gen:
+                if isinstance(delta, StreamedEvent):
+                    # Domain events ride in empty-choice chunks so text-only
+                    # OpenAI-compatible clients skip them; `role` stays on the
+                    # first text chunk.
+                    event_chunk = {
+                        "id": completion_id,
+                        "object": "chat.completion.chunk",
+                        "created": created_ts,
+                        "model": config_slug,
+                        "choices": [],
+                        "extensions": {"event": delta.payload},
+                    }
+                    yield f"data: {json.dumps(event_chunk)}\n\n"
+                    continue
                 chunk = {
                     "id": completion_id,
                     "object": "chat.completion.chunk",
