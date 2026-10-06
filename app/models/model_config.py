@@ -67,6 +67,11 @@ class ModelConfig(Base, TimestampMixin, SoftDeleteMixin):
     is_default = Column(Boolean, nullable=False, default=False, index=True)
     max_tool_rounds = Column(Integer, nullable=True)
     enabled_tools = Column(ARRAY(String), nullable=True)
+    # Opt-in for the Chat Completions `events` channel (PRD 0022): callers may
+    # receive validated MCP domain events only when the config owner allows it.
+    expose_events = Column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
 
     system_prompt = relationship(
         "SystemPrompt",

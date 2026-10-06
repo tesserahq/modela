@@ -10,6 +10,7 @@ from app.infra.logging_config import get_logger
 from app.auth.rbac import build_rbac_dependencies, infer_project
 from app.commands.completions.create_completion_command import CreateCompletionCommand
 from app.db import get_db
+from app.inference import StreamedEvent
 from app.schemas.completion import CompletionCreate, CompletionResponse
 from tessera_sdk.server.dependencies.auth import get_current_user
 
@@ -31,6 +32,9 @@ logger = get_logger()
 @router.post(
     "/chat/completions",
     response_model=CompletionResponse,
+    # `extensions` is set only for opted-in callers; everyone else gets the
+    # unchanged response body.
+    response_model_exclude_unset=True,
 )
 async def create_completion(
     payload: CompletionCreate,
@@ -45,7 +49,8 @@ async def create_completion(
         logger.info(
             f"Streaming completion for user {current_user.id} and project {project_id}"
         )
-        config_slug, delta_gen = await CreateCompletionCommand(db).stream_execute(
+        command = CreateCompletionCommand(db)
+        config_slug, delta_gen = await command.stream_execute(
             payload, project_id, request_id, user_id=current_user.id
         )
         completion_id = f"chatcmpl-{uuid.uuid4().hex}"
@@ -54,6 +59,20 @@ async def create_completion(
         async def _sse():
             first = True
             async for delta in delta_gen:
+                if isinstance(delta, StreamedEvent):
+                    # Domain events ride in empty-choice chunks so text-only
+                    # OpenAI-compatible clients skip them; `role` stays on the
+                    # first text chunk.
+                    event_chunk = {
+                        "id": completion_id,
+                        "object": "chat.completion.chunk",
+                        "created": created_ts,
+                        "model": config_slug,
+                        "choices": [],
+                        "extensions": {"event": delta.payload},
+                    }
+                    yield f"data: {json.dumps(event_chunk)}\n\n"
+                    continue
                 chunk = {
                     "id": completion_id,
                     "object": "chat.completion.chunk",
@@ -89,14 +108,27 @@ async def create_completion(
             headers={
                 "X-Modela-Config-Slug": config_slug,
                 "X-Modela-Request-Id": request_id,
+                **_omitted_include_header(command),
             },
         )
     logger.info(
         f"Creating completion for user {current_user.id} and project {project_id}"
     )
-    result = await CreateCompletionCommand(db).execute(
+    command = CreateCompletionCommand(db)
+    result = await command.execute(
         payload, project_id, request_id, user_id=current_user.id
     )
     response.headers["X-Modela-Config-Slug"] = result.model
     response.headers["X-Modela-Request-Id"] = request_id
+    response.headers.update(_omitted_include_header(command))
     return result
+
+
+def _omitted_include_header(command: CreateCompletionCommand) -> dict[str, str]:
+    """Name requested extension channels the ModelConfig does not expose.
+
+    Sent as a header so streaming callers learn it before the body starts.
+    """
+    if not command.omitted_includes:
+        return {}
+    return {"X-Modela-Omitted-Include": ", ".join(command.omitted_includes)}

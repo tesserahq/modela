@@ -55,6 +55,7 @@ class ModelConfigBase(BaseModel):
     is_default: bool = False
     max_tool_rounds: int | None = Field(None, ge=1, le=50)
     enabled_tools: list[str] | None = None
+    expose_events: bool = False
 
 
 class ModelConfigCreate(ModelConfigBase):
@@ -76,6 +77,7 @@ class ModelConfigUpdate(BaseModel):
     is_default: bool | None = None
     max_tool_rounds: int | None = Field(None, ge=1, le=50)
     enabled_tools: list[str] | None = None
+    expose_events: bool | None = None
 
 
 class ModelConfigResponse(ModelConfigBase):
