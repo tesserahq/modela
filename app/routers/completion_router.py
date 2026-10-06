@@ -49,7 +49,8 @@ async def create_completion(
         logger.info(
             f"Streaming completion for user {current_user.id} and project {project_id}"
         )
-        config_slug, delta_gen = await CreateCompletionCommand(db).stream_execute(
+        command = CreateCompletionCommand(db)
+        config_slug, delta_gen = await command.stream_execute(
             payload, project_id, request_id, user_id=current_user.id
         )
         completion_id = f"chatcmpl-{uuid.uuid4().hex}"
@@ -107,14 +108,27 @@ async def create_completion(
             headers={
                 "X-Modela-Config-Slug": config_slug,
                 "X-Modela-Request-Id": request_id,
+                **_omitted_include_header(command),
             },
         )
     logger.info(
         f"Creating completion for user {current_user.id} and project {project_id}"
     )
-    result = await CreateCompletionCommand(db).execute(
+    command = CreateCompletionCommand(db)
+    result = await command.execute(
         payload, project_id, request_id, user_id=current_user.id
     )
     response.headers["X-Modela-Config-Slug"] = result.model
     response.headers["X-Modela-Request-Id"] = request_id
+    response.headers.update(_omitted_include_header(command))
     return result
+
+
+def _omitted_include_header(command: CreateCompletionCommand) -> dict[str, str]:
+    """Name requested extension channels the ModelConfig does not expose.
+
+    Sent as a header so streaming callers learn it before the body starts.
+    """
+    if not command.omitted_includes:
+        return {}
+    return {"X-Modela-Omitted-Include": ", ".join(command.omitted_includes)}

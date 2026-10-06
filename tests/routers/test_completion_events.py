@@ -245,14 +245,27 @@ def test_invalid_metadata_does_not_fail_the_completion(
     assert response.json()["extensions"] == {"events": []}
 
 
-def test_events_on_closed_config_return_403_before_catalog_loading(
-    client: TestClient, closed_config, catalog, model
+def test_events_on_closed_config_are_omitted_and_reported_in_header(
+    client: TestClient, closed_config, catalog, mcp_result, model
 ):
-    response = _post(client, closed_config, include=["events"])
+    with patch("app.services.mcp.tool_executor.parse_mcp_metadata") as parse:
+        response = _post(client, closed_config, include=["events"])
 
-    assert response.status_code == 403
-    assert "events" in response.json()["detail"]
-    catalog.assert_not_called()
+    # The completion still succeeds; the channel is omitted (not an empty
+    # list, which would mean "no events happened") and named in a header.
+    assert response.status_code == 200
+    assert response.json()["choices"][0]["message"]["content"] == "Created Jane."
+    assert "extensions" not in response.json()
+    assert response.headers["X-Modela-Omitted-Include"] == "events"
+    parse.assert_not_called()
+
+
+def test_omitted_include_header_absent_when_channel_is_delivered(
+    client: TestClient, events_config, catalog, mcp_result, model
+):
+    response = _post(client, events_config, include=["events"])
+
+    assert "X-Modela-Omitted-Include" not in response.headers
 
 
 def test_unsupported_include_returns_422(client: TestClient, events_config):
@@ -307,10 +320,11 @@ def test_stream_without_include_has_no_event_chunks(
     assert all(c["choices"] for c in chunks)
 
 
-def test_stream_events_on_closed_config_return_403(
-    client: TestClient, closed_config, catalog, model
+def test_stream_events_on_closed_config_are_omitted_and_reported_in_header(
+    client: TestClient, closed_config, catalog, mcp_result, model
 ):
-    response = client.post(
+    with client.stream(
+        "POST",
         "/chat/completions",
         json={
             "model": closed_config.slug,
@@ -318,7 +332,15 @@ def test_stream_events_on_closed_config_return_403(
             "stream": True,
             "include": ["events"],
         },
-    )
+    ) as response:
+        assert response.status_code == 200
+        assert response.headers["X-Modela-Omitted-Include"] == "events"
+        lines = [line for line in response.iter_lines() if line]
 
-    assert response.status_code == 403
-    catalog.assert_not_called()
+    chunks = [
+        json.loads(line.removeprefix("data: "))
+        for line in lines
+        if line != "data: [DONE]"
+    ]
+    assert all("extensions" not in c for c in chunks)
+    assert chunks[-1]["choices"][0]["finish_reason"] == "stop"

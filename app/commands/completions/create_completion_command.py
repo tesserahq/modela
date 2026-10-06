@@ -31,6 +31,9 @@ class CreateCompletionCommand:
     def __init__(self, db: Session) -> None:
         self.db = db
         self.repo = ModelConfigRepository(db)
+        # Extension channels the caller requested but the resolved ModelConfig
+        # does not expose; the router reports them in a response header.
+        self.omitted_includes: list[str] = []
 
     async def execute(
         self,
@@ -146,23 +149,23 @@ class CreateCompletionCommand:
             drain_events=event_collector.drain if event_collector else None,
         )
 
-    @staticmethod
-    def _event_collector_for(payload, config) -> CompletionEventCollector | None:
-        """Authorize the requested `events` channel before any tool work.
+    def _event_collector_for(self, payload, config) -> CompletionEventCollector | None:
+        """Return a collector when the `events` channel is requested and exposed.
 
-        Raises 403 when the caller asks for events the ModelConfig does not
-        expose; this runs before MCP catalog loading and inference.
+        A request for events on a ModelConfig that does not expose them still
+        completes normally: the channel is omitted (never returned as an empty
+        list, which would mean "no events happened") and recorded in
+        ``omitted_includes`` so the caller can tell it was not delivered.
         """
         if not payload.wants_events:
             return None
         if not config.expose_events:
-            raise HTTPException(
-                status_code=403,
-                detail=(
-                    f"ModelConfig '{config.slug}' does not expose the "
-                    "'events' channel."
-                ),
+            logger.info(
+                "Omitting 'events' channel: ModelConfig %s does not expose it",
+                config.slug,
             )
+            self.omitted_includes.append("events")
+            return None
         return CompletionEventCollector()
 
     def _build_toolsets(self, config, mcp_tools, user_id, event_collector=None):
