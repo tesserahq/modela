@@ -16,7 +16,7 @@ from pydantic_ai.messages import (
 )
 from pydantic_ai.toolsets import AbstractToolset
 
-from app.exceptions.provider_errors import ProviderError
+from app.exceptions.provider_errors import ProviderError, ProviderTimeoutError
 from app.exceptions.structured_output_validation_error import (
     StructuredOutputValidationError,
 )
@@ -88,6 +88,8 @@ class AgentRunner:
         ):
             try:
                 result = await agent.run(user_prompt, **run_kwargs)
+            except TimeoutError as e:
+                raise ProviderTimeoutError(str(e)) from e
             except UnexpectedModelBehavior as e:
                 if output_type is not None:
                     raise StructuredOutputValidationError(
@@ -149,22 +151,31 @@ class AgentRunner:
         with safe_instrument_span(
             tracer, "inference.agent.run", attributes=span_attributes
         ):
-            async with agent.run_stream_events(user_prompt, **run_kwargs) as events:
-                async for event in events:
-                    if drain_events is not None:
-                        for payload in drain_events():
-                            yield StreamedEvent(payload)
-                    if isinstance(event, PartStartEvent) and isinstance(
-                        event.part, TextPart
-                    ):
-                        if event.part.content:
-                            yield event.part.content
-                    elif (
-                        isinstance(event, PartDeltaEvent)
-                        and isinstance(event.delta, TextPartDelta)
-                        and event.delta.content_delta
-                    ):
-                        yield event.delta.content_delta
+            try:
+                async with agent.run_stream_events(user_prompt, **run_kwargs) as events:
+                    async for event in events:
+                        if drain_events is not None:
+                            for payload in drain_events():
+                                yield StreamedEvent(payload)
+                        if isinstance(event, PartStartEvent) and isinstance(
+                            event.part, TextPart
+                        ):
+                            if event.part.content:
+                                yield event.part.content
+                        elif (
+                            isinstance(event, PartDeltaEvent)
+                            and isinstance(event.delta, TextPartDelta)
+                            and event.delta.content_delta
+                        ):
+                            yield event.delta.content_delta
+            except Exception:
+                # A tool may have committed a mutation immediately before a
+                # later model/provider failure. Give the transport one chance
+                # to send those events before propagating the original error.
+                if drain_events is not None:
+                    for payload in drain_events():
+                        yield StreamedEvent(payload)
+                raise
             if drain_events is not None:
                 for payload in drain_events():
                     yield StreamedEvent(payload)

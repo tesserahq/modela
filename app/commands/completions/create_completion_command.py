@@ -12,6 +12,7 @@ from pydantic_ai.messages import (
 from sqlalchemy.orm import Session
 
 from app.commands.completions.schema_to_model import schema_to_model
+from app.exceptions.completion_run_error import CompletionRunError
 from app.exceptions.resource_not_found_error import ResourceNotFoundError
 from app.inference import AgentRunner, build_model
 from app.infra.logging_config import get_logger
@@ -19,6 +20,7 @@ from app.repositories.mcp_tool_catalog_repository import MCPToolCatalogRepositor
 from app.repositories.model_config_repository import ModelConfigRepository
 from app.repositories.system_prompt_repository import SystemPromptRepository
 from app.schemas.completion import CompletionCreate, CompletionResponse
+from app.services.completions.run_context import CompletionRunContext
 from app.services.mcp.event_collector import CompletionEventCollector
 from app.services.mcp.mcp_toolset import MCPToolset
 from app.services.mcp.tool_executor import MCPToolExecutor
@@ -44,7 +46,8 @@ class CreateCompletionCommand:
         user_id: UUID,
     ) -> CompletionResponse:
         config = self._resolve_config(payload.model)
-        event_collector = self._event_collector_for(payload, config)
+        run_context = self._run_context_for(payload, config)
+        event_collector = run_context.event_collector
 
         result_model: type | None = None
         if config.output_schema:
@@ -69,14 +72,22 @@ class CreateCompletionCommand:
 
         toolsets = self._build_toolsets(config, tools, user_id, event_collector)
 
-        result = await AgentRunner(model).run(
-            user_prompt,
-            system_prompt=system_prompt_content,
-            output_type=result_model,
-            message_history=messages or None,
-            toolsets=toolsets,
-            max_result_retries=config.max_tool_rounds,
-        )
+        try:
+            result = await AgentRunner(model).run(
+                user_prompt,
+                system_prompt=system_prompt_content,
+                output_type=result_model,
+                message_history=messages or None,
+                toolsets=toolsets,
+                max_result_retries=config.max_tool_rounds,
+            )
+        except Exception as error:
+            if event_collector is None:
+                raise
+            raise CompletionRunError(
+                error,
+                event_snapshot=run_context.snapshot_events(),
+            ) from error
 
         # `extensions` is passed only when requested, so it stays unset (and is
         # omitted from the response) for callers that did not opt in.
@@ -120,7 +131,8 @@ class CreateCompletionCommand:
                 status_code=422,
                 detail="Streaming and structured outputs cannot be used together.",
             )
-        event_collector = self._event_collector_for(payload, config)
+        run_context = self._run_context_for(payload, config)
+        event_collector = run_context.event_collector
 
         tools = await MCPToolCatalogRepository(self.db).get_tools_for_model_config(
             config.id, user_id=user_id
@@ -167,6 +179,9 @@ class CreateCompletionCommand:
             self.omitted_includes.append("events")
             return None
         return CompletionEventCollector()
+
+    def _run_context_for(self, payload, config) -> CompletionRunContext:
+        return CompletionRunContext(self._event_collector_for(payload, config))
 
     def _build_toolsets(self, config, mcp_tools, user_id, event_collector=None):
         """Combines the MCP-server toolset (existing, per-server tools) with

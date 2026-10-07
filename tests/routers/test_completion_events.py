@@ -12,6 +12,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from fastapi.testclient import TestClient
 from fastmcp.client.client import CallToolResult
+from pydantic_ai.exceptions import UnexpectedModelBehavior
 from pydantic_ai.messages import ModelResponse, TextPart, ToolCallPart, ToolReturnPart
 from pydantic_ai.models.test import TestModel
 from sqlalchemy.orm import Session
@@ -29,7 +30,9 @@ PERSON = {"id": "person-1", "email": "jane@example.com", "phone": "555-0100"}
 EVENT = event_payload("evt-1")
 
 
-def _config(db: Session, slug: str, *, expose_events: bool):
+def _config(
+    db: Session, slug: str, *, expose_events: bool, output_schema: dict | None = None
+):
     return ModelConfigRepository(db).create(
         {
             "slug": slug,
@@ -38,6 +41,7 @@ def _config(db: Session, slug: str, *, expose_events: bool):
             "model": "gpt-4o",
             "is_default": False,
             "expose_events": expose_events,
+            "output_schema": output_schema,
         }
     )
 
@@ -124,6 +128,23 @@ class CreatePersonModel(TestModel):
                 ToolCallPart(TOOL.qualified_name, {"first_name": "Jane"}, "call-1"),
             ]
         )
+
+
+class FailAfterCreateModel(CreatePersonModel):
+    """Commits through the MCP tool, then fails the following model round."""
+
+    def __init__(self, error: Exception):
+        super().__init__()
+        self.error = error
+
+    def _request(self, messages, model_settings, model_request_parameters):
+        if any(
+            isinstance(part, ToolReturnPart)
+            for message in messages
+            for part in message.parts
+        ):
+            raise self.error
+        return super()._request(messages, model_settings, model_request_parameters)
 
 
 @pytest.fixture
@@ -282,6 +303,74 @@ def test_expose_events_defaults_to_false(db: Session):
     assert config.expose_events is False
 
 
+@pytest.mark.parametrize(
+    ("error", "expected_status"),
+    [
+        (UnexpectedModelBehavior("provider failed"), 502),
+        (TimeoutError("provider timed out"), 504),
+        (RuntimeError("post-commit failure"), 500),
+    ],
+)
+def test_committed_events_survive_later_completion_failures(
+    client: TestClient,
+    events_config,
+    catalog,
+    mcp_result,
+    error,
+    expected_status,
+):
+    with patch(
+        "app.commands.completions.create_completion_command.build_model",
+        return_value=FailAfterCreateModel(error),
+    ):
+        response = _post(client, events_config, include=["events"])
+
+    assert response.status_code == expected_status
+    assert response.json()["extensions"]["events"][0]["id"] == "evt-1"
+
+
+def test_failure_response_without_event_opt_in_remains_unchanged(
+    client: TestClient, events_config, catalog, mcp_result
+):
+    with patch(
+        "app.commands.completions.create_completion_command.build_model",
+        return_value=FailAfterCreateModel(UnexpectedModelBehavior("provider failed")),
+    ):
+        response = _post(client, events_config)
+
+    assert response.status_code == 502
+    assert "extensions" not in response.json()
+
+
+def test_structured_output_failure_preserves_events_and_validation_details(
+    client: TestClient, db: Session, catalog, mcp_result
+):
+    config = _config(
+        db,
+        "events-structured-failure",
+        expose_events=True,
+        output_schema={
+            "type": "object",
+            "properties": {"answer": {"type": "string"}},
+            "required": ["answer"],
+        },
+    )
+    with patch(
+        "app.commands.completions.create_completion_command.build_model",
+        return_value=FailAfterCreateModel(
+            UnexpectedModelBehavior("structured response was invalid")
+        ),
+    ):
+        response = _post(client, config, include=["events"])
+
+    body = response.json()
+    assert response.status_code == 502
+    assert body["validation_errors"] == [{"message": "structured response was invalid"}]
+    assert body["raw_content"] == "structured response was invalid"
+    assert body["extensions"]["events"][0]["id"] == "evt-1"
+    assert "tool_executions" not in body["extensions"]
+
+
 # --- Streaming ------------------------------------------------------------
 
 
@@ -298,7 +387,7 @@ def test_stream_emits_event_chunk_between_text_in_execution_order(
     assert event_chunk["extensions"]["event"]["id"] == "evt-1"
 
     index = chunks.index(event_chunk)
-    text = lambda part: "".join(  # noqa: E731
+    text = lambda part: "".join(
         c["choices"][0]["delta"].get("content") or "" for c in part if c["choices"]
     )
     assert text(chunks[:index]) == "Creating. "
