@@ -42,7 +42,6 @@ class CompletionEventCollector:
         self._bytes = 0
         self._drained = 0
         self._suppressed = 0
-        self._truncation_drained = False
 
     def record(self, events: Iterable[MCPEvent], *, tool_name: str) -> None:
         for event in events:
@@ -71,17 +70,18 @@ class CompletionEventCollector:
         self._drained = len(self._events)
         return pending
 
-    def drain_truncation(self) -> dict[str, Any] | None:
-        """Return the final channel marker once, after event production ends.
+    def truncation(self) -> dict[str, Any] | None:
+        """Return the channel marker, or None when nothing was suppressed.
 
-        Callers wait until terminal success or failure so ``dropped_count`` is
-        complete. A streaming transport can then place the marker after the
-        last retained event without retaining any suppressed event payloads.
+        ``dropped_count`` is final only once event production has ended, so
+        callers read it at terminal success or failure.
         """
-        if self._truncation_drained or self._suppressed == 0:
+        if self._suppressed == 0:
             return None
-        self._truncation_drained = True
-        return self._truncation()
+        return TruncationMarker(
+            channel=CompletionInclude.EVENTS,
+            dropped_count=self._suppressed,
+        ).model_dump(mode="json")
 
     @property
     def events(self) -> list[dict[str, Any]]:
@@ -90,14 +90,9 @@ class CompletionEventCollector:
     @property
     def truncations(self) -> list[dict[str, Any]]:
         """Return the channel marker collection used by non-streaming output."""
-        return [self._truncation()] if self._suppressed else []
+        marker = self.truncation()
+        return [marker] if marker is not None else []
 
     @property
     def suppressed_count(self) -> int:
         return self._suppressed
-
-    def _truncation(self) -> dict[str, Any]:
-        return TruncationMarker(
-            channel=CompletionInclude.EVENTS,
-            dropped_count=self._suppressed,
-        ).model_dump(mode="json")

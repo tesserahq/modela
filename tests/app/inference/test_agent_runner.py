@@ -17,7 +17,11 @@ from pydantic_ai.models.test import TestModel
 from pydantic_ai.toolsets.function import FunctionToolset
 
 from app.exceptions.provider_errors import ProviderError, ProviderTimeoutError
-from app.inference.agent_runner import StreamedEvent, StreamedTruncation
+from app.inference.agent_runner import (
+    StreamedEvent,
+    StreamedExtension,
+    StreamedTruncation,
+)
 
 
 def _sdk_timeout() -> ModelAPIError:
@@ -164,7 +168,7 @@ class TestAgentRunnerRunStream:
             recorded.clear()
             return pending
 
-        drain_truncation = MagicMock(
+        event_truncation = MagicMock(
             return_value={
                 "channel": "events",
                 "truncated": True,
@@ -176,7 +180,7 @@ class TestAgentRunnerRunStream:
             stream = runner.run_stream(
                 "hello",
                 drain_events=drain_events,
-                drain_event_truncation=drain_truncation,
+                event_truncation=event_truncation,
             )
             assert await anext(stream) == StreamedEvent({"id": "evt-1"})
             assert await anext(stream) == StreamedTruncation(
@@ -188,12 +192,37 @@ class TestAgentRunnerRunStream:
             )
             with pytest.raises(RuntimeError, match="later provider failure"):
                 await anext(stream)
-        drain_truncation.assert_called_once_with()
+        event_truncation.assert_called_once_with()
+
+    @pytest.mark.asyncio
+    async def test_run_stream_drain_failure_does_not_mask_provider_error(self, runner):
+        @asynccontextmanager
+        async def failing_stream(*args, **kwargs):
+            async def events():
+                raise ProviderTimeoutError("provider timed out")
+                yield  # pragma: no cover - makes this an async generator
+
+            yield events()
+
+        agent = _make_agent_mock()
+        agent.run_stream_events = failing_stream
+        event_truncation = MagicMock(side_effect=ValueError("bad marker"))
+
+        with (
+            patch("app.inference.agent_runner.Agent", return_value=agent),
+            pytest.raises(ProviderTimeoutError, match="provider timed out"),
+        ):
+            async for _ in runner.run_stream(
+                "hello",
+                drain_events=MagicMock(return_value=[]),
+                event_truncation=event_truncation,
+            ):
+                pass
 
     @pytest.mark.asyncio
     async def test_run_stream_disconnect_does_not_retry_event_delivery(self, runner):
         drain_events = MagicMock(return_value=[])
-        drain_truncation = MagicMock(return_value=None)
+        event_truncation = MagicMock(return_value=None)
 
         @asynccontextmanager
         async def cancelled_stream(*args, **kwargs):
@@ -213,20 +242,20 @@ class TestAgentRunnerRunStream:
             async for _ in runner.run_stream(
                 "hello",
                 drain_events=drain_events,
-                drain_event_truncation=drain_truncation,
+                event_truncation=event_truncation,
             ):
                 pass
 
         # A cancelled transport is no longer writable. Delivery remains
         # best-effort rather than consuming records that no client can see.
         drain_events.assert_not_called()
-        drain_truncation.assert_not_called()
+        event_truncation.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_run_stream_emits_truncation_after_final_event(self, runner):
         agent = _make_agent_mock(stream_chunks=["done"])
         drain_events = MagicMock(side_effect=[[], [{"id": "evt-1"}]])
-        drain_truncation = MagicMock(
+        event_truncation = MagicMock(
             return_value={
                 "channel": "events",
                 "truncated": True,
@@ -240,7 +269,7 @@ class TestAgentRunnerRunStream:
                 async for item in runner.run_stream(
                     "hello",
                     drain_events=drain_events,
-                    drain_event_truncation=drain_truncation,
+                    event_truncation=event_truncation,
                 )
             ]
 
@@ -360,3 +389,8 @@ class TestAgentRunnerRunStream:
         _, kwargs = agent.run_stream_events.call_args
         assert "output_retries" not in kwargs
         assert "retries" not in kwargs
+
+
+def test_streamed_extension_requires_field():
+    with pytest.raises(TypeError, match="must define a `field`"):
+        StreamedExtension({"id": "evt-1"})

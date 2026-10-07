@@ -15,6 +15,7 @@ from app.exceptions.structured_output_validation_error import (
     StructuredOutputValidationError,
 )
 from app.infra.logging_config import get_logger
+from app.schemas.completion import build_event_extensions
 
 logger = get_logger()
 
@@ -128,10 +129,10 @@ def register_exception_handlers(app: FastAPI) -> None:
             # the way an unwrapped unexpected error would be.
             logger.error("Unhandled error during completion", exc_info=original)
             error = _internal_error(original)
-        extensions = {"events": exc.events}
-        if exc.truncations:
-            extensions["truncations"] = exc.truncations
-        return _response(error, {"extensions": extensions})
+        return _response(
+            error,
+            {"extensions": build_event_extensions(exc.events, exc.truncations)},
+        )
 
     async def known_error_handler(request: Request, exc: Exception):
         return _response(_describe_error(exc))

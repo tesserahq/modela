@@ -26,8 +26,10 @@ from app.exceptions.structured_output_validation_error import (
     StructuredOutputValidationError,
 )
 from app.inference.model import ModelaModel
+from app.infra.logging_config import get_logger
 from app.infra.telemetry import safe_instrument_span
 
+logger = get_logger()
 tracer = trace.get_tracer(__name__)
 
 _PROVIDER_TIMEOUT_STATUSES = frozenset({408, 504})
@@ -69,6 +71,12 @@ class StreamedExtension:
     payload: dict[str, Any]
     field: ClassVar[str]
 
+    def __post_init__(self) -> None:
+        # The transport reads `field` after the response has started, so a
+        # missing one must fail here rather than mid-stream.
+        if not isinstance(getattr(type(self), "field", None), str):
+            raise TypeError(f"{type(self).__name__} must define a `field` name")
+
 
 @dataclass(frozen=True)
 class StreamedEvent(StreamedExtension):
@@ -86,14 +94,17 @@ class StreamedTruncation(StreamedExtension):
 
 def _terminal_event_items(
     drain_events: Callable[[], list[dict[str, Any]]] | None,
-    drain_truncation: Callable[[], dict[str, Any] | None] | None,
+    event_truncation: Callable[[], dict[str, Any] | None] | None,
 ) -> list[StreamedEvent | StreamedTruncation]:
-    """Drain final events before the channel's at-most-once marker."""
+    """Drain final events, then the channel's truncation marker if any.
+
+    Called exactly once per stream, so the marker is emitted at most once.
+    """
     items: list[StreamedEvent | StreamedTruncation] = []
     if drain_events is not None:
         items.extend(StreamedEvent(payload) for payload in drain_events())
-    if drain_truncation is not None:
-        marker = drain_truncation()
+    if event_truncation is not None:
+        marker = event_truncation()
         if marker is not None:
             items.append(StreamedTruncation(marker))
     return items
@@ -174,13 +185,18 @@ class AgentRunner:
         toolsets: list[AbstractToolset] | None = None,
         max_result_retries: int | None = None,
         drain_events: Callable[[], list[dict[str, Any]]] | None = None,
-        drain_event_truncation: Callable[[], dict[str, Any] | None] | None = None,
+        event_truncation: Callable[[], dict[str, Any] | None] | None = None,
     ) -> AsyncIterator[str | StreamedEvent | StreamedTruncation]:
         """Stream text deltas, interleaved with domain events when requested.
 
         ``drain_events`` returns events recorded since its previous call. It is
         polled after every agent event, so an event is yielded right after the
         tool result that produced it, in actual execution order.
+
+        ``event_truncation`` returns the events channel's truncation marker, or
+        None. It is read once, after the final drain on success or failure, so
+        its ``dropped_count`` is complete and the marker follows the last
+        retained event.
         """
         agent = Agent(model=self._model)
 
@@ -230,8 +246,14 @@ class AgentRunner:
                 # A tool may have committed a mutation immediately before a
                 # later model/provider failure. Give the transport one chance
                 # to send those events before propagating the original error.
-                for item in _terminal_event_items(drain_events, drain_event_truncation):
+                try:
+                    items = _terminal_event_items(drain_events, event_truncation)
+                except Exception:
+                    # Never let the drain mask the provider error being raised.
+                    logger.exception("Failed to drain completion events after error")
+                    items = []
+                for item in items:
                     yield item
                 raise
-            for item in _terminal_event_items(drain_events, drain_event_truncation):
+            for item in _terminal_event_items(drain_events, event_truncation):
                 yield item
