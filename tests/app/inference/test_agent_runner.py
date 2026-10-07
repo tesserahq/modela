@@ -1,6 +1,11 @@
+import asyncio
+from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx
+import openai
 import pytest
+from pydantic_ai.exceptions import ModelAPIError, ModelHTTPError
 from pydantic_ai.messages import (
     ModelResponse,
     PartStartEvent,
@@ -10,6 +15,18 @@ from pydantic_ai.messages import (
 )
 from pydantic_ai.models.test import TestModel
 from pydantic_ai.toolsets.function import FunctionToolset
+
+from app.exceptions.provider_errors import ProviderError, ProviderTimeoutError
+from app.inference.agent_runner import StreamedEvent
+
+
+def _sdk_timeout() -> ModelAPIError:
+    request = httpx.Request("POST", "https://api.openai.com/v1/chat/completions")
+    sdk_error = openai.APITimeoutError(request=request)
+    sdk_error.__cause__ = httpx.ReadTimeout("timed out", request=request)
+    error = ModelAPIError(model_name="gpt-4o", message="Request timed out.")
+    error.__cause__ = sdk_error
+    return error
 
 
 def _make_mock_result(output="response text", input_tokens=5, output_tokens=10):
@@ -91,8 +108,94 @@ class TestAgentRunnerRun:
         assert result.input_tokens == 2
         assert result.output_tokens == 4
 
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("error", "expected"),
+        [
+            (_sdk_timeout(), ProviderTimeoutError),
+            (ModelHTTPError(504, "gpt-4o"), ProviderTimeoutError),
+            (ModelHTTPError(429, "gpt-4o"), ProviderError),
+            (ModelAPIError("gpt-4o", "Connection error."), ProviderError),
+        ],
+    )
+    async def test_run_classifies_provider_failures(self, runner, error, expected):
+        agent = _make_agent_mock()
+        agent.run.side_effect = error
+        with (
+            patch("app.inference.agent_runner.Agent", return_value=agent),
+            pytest.raises(expected) as raised,
+        ):
+            await runner.run("hello")
+        assert type(raised.value) is expected
+        assert raised.value.__cause__ is error
+
+    @pytest.mark.asyncio
+    async def test_run_leaves_non_provider_timeouts_unclassified(self, runner):
+        # A tool's own timeout is not the provider's: it must not become a 504.
+        agent = _make_agent_mock()
+        agent.run.side_effect = TimeoutError("tool timed out")
+        with (
+            patch("app.inference.agent_runner.Agent", return_value=agent),
+            pytest.raises(TimeoutError, match="tool timed out"),
+        ):
+            await runner.run("hello")
+
 
 class TestAgentRunnerRunStream:
+    @pytest.mark.asyncio
+    async def test_run_stream_drains_committed_events_before_later_failure(
+        self, runner
+    ):
+        recorded = [{"id": "evt-1"}]
+
+        @asynccontextmanager
+        async def failing_stream(*args, **kwargs):
+            async def events():
+                raise RuntimeError("later provider failure")
+                yield  # pragma: no cover - makes this an async generator
+
+            yield events()
+
+        agent = _make_agent_mock()
+        agent.run_stream_events = failing_stream
+
+        def drain_events():
+            pending = list(recorded)
+            recorded.clear()
+            return pending
+
+        with patch("app.inference.agent_runner.Agent", return_value=agent):
+            stream = runner.run_stream("hello", drain_events=drain_events)
+            assert await anext(stream) == StreamedEvent({"id": "evt-1"})
+            with pytest.raises(RuntimeError, match="later provider failure"):
+                await anext(stream)
+
+    @pytest.mark.asyncio
+    async def test_run_stream_disconnect_does_not_retry_event_delivery(self, runner):
+        drain_events = MagicMock(return_value=[])
+
+        @asynccontextmanager
+        async def cancelled_stream(*args, **kwargs):
+            async def events():
+                raise asyncio.CancelledError
+                yield  # pragma: no cover - makes this an async generator
+
+            yield events()
+
+        agent = _make_agent_mock()
+        agent.run_stream_events = cancelled_stream
+
+        with (
+            patch("app.inference.agent_runner.Agent", return_value=agent),
+            pytest.raises(asyncio.CancelledError),
+        ):
+            async for _ in runner.run_stream("hello", drain_events=drain_events):
+                pass
+
+        # A cancelled transport is no longer writable. Delivery remains
+        # best-effort rather than consuming records that no client can see.
+        drain_events.assert_not_called()
+
     @pytest.mark.asyncio
     async def test_run_stream_completes_tool_loop_after_preamble(self):
         tool_calls = []
@@ -159,7 +262,7 @@ class TestAgentRunnerRunStream:
                     ]
                 )
 
-        from app.inference.agent_runner import AgentRunner, StreamedEvent
+        from app.inference.agent_runner import AgentRunner
 
         items = [
             item

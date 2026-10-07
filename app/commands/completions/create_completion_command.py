@@ -12,6 +12,7 @@ from pydantic_ai.messages import (
 from sqlalchemy.orm import Session
 
 from app.commands.completions.schema_to_model import schema_to_model
+from app.exceptions.completion_run_error import CompletionRunError
 from app.exceptions.resource_not_found_error import ResourceNotFoundError
 from app.inference import AgentRunner, build_model
 from app.infra.logging_config import get_logger
@@ -69,14 +70,19 @@ class CreateCompletionCommand:
 
         toolsets = self._build_toolsets(config, tools, user_id, event_collector)
 
-        result = await AgentRunner(model).run(
-            user_prompt,
-            system_prompt=system_prompt_content,
-            output_type=result_model,
-            message_history=messages or None,
-            toolsets=toolsets,
-            max_result_retries=config.max_tool_rounds,
-        )
+        try:
+            result = await AgentRunner(model).run(
+                user_prompt,
+                system_prompt=system_prompt_content,
+                output_type=result_model,
+                message_history=messages or None,
+                toolsets=toolsets,
+                max_result_retries=config.max_tool_rounds,
+            )
+        except Exception as error:
+            if event_collector is None:
+                raise
+            raise CompletionRunError(error, events=event_collector.events) from error
 
         # `extensions` is passed only when requested, so it stays unset (and is
         # omitted from the response) for callers that did not opt in.
