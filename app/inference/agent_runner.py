@@ -1,6 +1,6 @@
 from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, ClassVar
 
 import httpx
 from opentelemetry import trace
@@ -63,10 +63,40 @@ class AgentResult:
 
 
 @dataclass(frozen=True)
-class StreamedEvent:
-    """A serialized domain event to interleave with streamed text."""
+class StreamedExtension:
+    """Typed extension item rendered by the transport's generic envelope."""
 
     payload: dict[str, Any]
+    field: ClassVar[str]
+
+
+@dataclass(frozen=True)
+class StreamedEvent(StreamedExtension):
+    """A serialized domain event to interleave with streamed text."""
+
+    field = "event"
+
+
+@dataclass(frozen=True)
+class StreamedTruncation(StreamedExtension):
+    """A terminal response-channel truncation marker."""
+
+    field = "truncation"
+
+
+def _terminal_event_items(
+    drain_events: Callable[[], list[dict[str, Any]]] | None,
+    drain_truncation: Callable[[], dict[str, Any] | None] | None,
+) -> list[StreamedEvent | StreamedTruncation]:
+    """Drain final events before the channel's at-most-once marker."""
+    items: list[StreamedEvent | StreamedTruncation] = []
+    if drain_events is not None:
+        items.extend(StreamedEvent(payload) for payload in drain_events())
+    if drain_truncation is not None:
+        marker = drain_truncation()
+        if marker is not None:
+            items.append(StreamedTruncation(marker))
+    return items
 
 
 class AgentRunner:
@@ -144,7 +174,8 @@ class AgentRunner:
         toolsets: list[AbstractToolset] | None = None,
         max_result_retries: int | None = None,
         drain_events: Callable[[], list[dict[str, Any]]] | None = None,
-    ) -> AsyncIterator[str | StreamedEvent]:
+        drain_event_truncation: Callable[[], dict[str, Any] | None] | None = None,
+    ) -> AsyncIterator[str | StreamedEvent | StreamedTruncation]:
         """Stream text deltas, interleaved with domain events when requested.
 
         ``drain_events`` returns events recorded since its previous call. It is
@@ -199,10 +230,8 @@ class AgentRunner:
                 # A tool may have committed a mutation immediately before a
                 # later model/provider failure. Give the transport one chance
                 # to send those events before propagating the original error.
-                if drain_events is not None:
-                    for payload in drain_events():
-                        yield StreamedEvent(payload)
+                for item in _terminal_event_items(drain_events, drain_event_truncation):
+                    yield item
                 raise
-            if drain_events is not None:
-                for payload in drain_events():
-                    yield StreamedEvent(payload)
+            for item in _terminal_event_items(drain_events, drain_event_truncation):
+                yield item

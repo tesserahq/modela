@@ -1,6 +1,7 @@
 from typing import Any, Optional
 
 from pydantic import BaseModel, Field, model_validator
+from tessera_sdk.clients.modela import ChatCompletionExtensions
 from tessera_sdk.mcp import CompletionInclude
 
 # Response channels this service can currently deliver. `tool_executions` is
@@ -80,11 +81,6 @@ class CompletionUsage(BaseModel):
     total_tokens: int
 
 
-class CompletionExtensions(BaseModel):
-    # Serialized Tessera `Event` objects, in the order their tools completed.
-    events: list[dict[str, Any]] = Field(default_factory=list)
-
-
 class CompletionResponse(BaseModel):
     id: str
     object: str
@@ -94,4 +90,4 @@ class CompletionResponse(BaseModel):
     usage: CompletionUsage
     # Present only when the caller requested an extension channel; the route
     # serializes with exclude_unset so default responses are unchanged.
-    extensions: Optional[CompletionExtensions] = None
+    extensions: Optional[ChatCompletionExtensions] = None

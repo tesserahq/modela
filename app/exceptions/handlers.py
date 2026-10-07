@@ -128,7 +128,10 @@ def register_exception_handlers(app: FastAPI) -> None:
             # the way an unwrapped unexpected error would be.
             logger.error("Unhandled error during completion", exc_info=original)
             error = _internal_error(original)
-        return _response(error, {"extensions": {"events": exc.events}})
+        extensions = {"events": exc.events}
+        if exc.truncations:
+            extensions["truncations"] = exc.truncations
+        return _response(error, {"extensions": extensions})
 
     async def known_error_handler(request: Request, exc: Exception):
         return _response(_describe_error(exc))

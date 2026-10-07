@@ -36,6 +36,9 @@ def test_event_count_budget_suppresses_later_events():
 
     assert [event["id"] for event in collector.events] == ["a", "b"]
     assert collector.suppressed_count == 1
+    assert collector.truncations == [
+        {"channel": "events", "truncated": True, "dropped_count": 1}
+    ]
 
 
 def test_byte_budget_suppresses_events_that_do_not_fit():
@@ -47,3 +50,24 @@ def test_byte_budget_suppresses_events_that_do_not_fit():
 
     assert [event["id"] for event in collector.events] == ["a"]
     assert collector.suppressed_count == 1
+
+
+def test_truncation_marker_is_drained_once_with_final_suppressed_count():
+    collector = CompletionEventCollector(max_events=1)
+    collector.record([mcp_event("a"), mcp_event("b")], tool_name="t")
+    collector.record([mcp_event("c"), mcp_event("d")], tool_name="t")
+
+    assert collector.drain_truncation() == {
+        "channel": "events",
+        "truncated": True,
+        "dropped_count": 3,
+    }
+    assert collector.drain_truncation() is None
+
+
+def test_collector_without_suppression_has_no_truncation_marker():
+    collector = CompletionEventCollector()
+    collector.record([mcp_event("a")], tool_name="t")
+
+    assert collector.truncations == []
+    assert collector.drain_truncation() is None

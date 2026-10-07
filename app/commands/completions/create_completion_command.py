@@ -82,15 +82,15 @@ class CreateCompletionCommand:
         except Exception as error:
             if event_collector is None:
                 raise
-            raise CompletionRunError(error, events=event_collector.events) from error
+            raise CompletionRunError(
+                error,
+                events=event_collector.events,
+                truncations=event_collector.truncations,
+            ) from error
 
         # `extensions` is passed only when requested, so it stays unset (and is
         # omitted from the response) for callers that did not opt in.
-        extensions = (
-            {"extensions": {"events": event_collector.events}}
-            if event_collector is not None
-            else {}
-        )
+        extensions = self._response_extensions(event_collector)
         return CompletionResponse(
             **extensions,
             id=f"chatcmpl-{uuid.uuid4().hex}",
@@ -153,7 +153,22 @@ class CreateCompletionCommand:
             message_history=messages or None,
             toolsets=toolsets,
             drain_events=event_collector.drain if event_collector else None,
+            drain_event_truncation=(
+                event_collector.drain_truncation if event_collector else None
+            ),
         )
+
+    @staticmethod
+    def _response_extensions(
+        event_collector: CompletionEventCollector | None,
+    ) -> dict:
+        if event_collector is None:
+            return {}
+        extension_values = {"events": event_collector.events}
+        truncations = event_collector.truncations
+        if truncations:
+            extension_values["truncations"] = truncations
+        return {"extensions": extension_values}
 
     def _event_collector_for(self, payload, config) -> CompletionEventCollector | None:
         """Return a collector when the `events` channel is requested and exposed.

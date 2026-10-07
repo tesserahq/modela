@@ -27,6 +27,7 @@ from app.exceptions.invalid_parameter_error import InvalidParameterError
 from app.exceptions.resource_not_found_error import ResourceNotFoundError
 from app.repositories.model_config_repository import ModelConfigRepository
 from app.schemas.mcp_tool import MCPCatalogTool
+from app.services.mcp.event_collector import CompletionEventCollector
 from tests.app.services.mcp.event_fixtures import event_payload, events_meta
 
 TOOL = MCPCatalogTool(
@@ -344,6 +345,24 @@ def _post_failing(client, config, error, **extra):
         return _post(client, config, **extra)
 
 
+def _truncate_after_one_event(mcp_result):
+    mcp_result.return_value = CallToolResult(
+        content=[],
+        structured_content=PERSON,
+        meta=events_meta(
+            EVENT,
+            event_payload("evt-2"),
+            event_payload("evt-3"),
+        ),
+        data=PERSON,
+        is_error=False,
+    )
+    return patch(
+        "app.commands.completions.create_completion_command.CompletionEventCollector",
+        return_value=CompletionEventCollector(max_events=1),
+    )
+
+
 @pytest.mark.parametrize("opted_in", [False, True], ids=["direct", "events"])
 @pytest.mark.parametrize(("error", "expected_status", "detail"), CLASSIFIED_FAILURES)
 def test_completion_failures_keep_status_and_body_with_events_opt_in(
@@ -435,6 +454,41 @@ def test_structured_output_failure_preserves_events_and_validation_details(
     assert "tool_executions" not in body["extensions"]
 
 
+def test_non_streaming_response_reports_event_truncation(
+    client: TestClient, events_config, catalog, mcp_result, model
+):
+    with _truncate_after_one_event(mcp_result):
+        response = _post(client, events_config, include=["events"])
+
+    assert response.status_code == 200
+    assert [event["id"] for event in response.json()["extensions"]["events"]] == [
+        "evt-1"
+    ]
+    assert response.json()["extensions"]["truncations"] == [
+        {"channel": "events", "truncated": True, "dropped_count": 2}
+    ]
+
+
+def test_failure_response_reports_event_truncation_without_diagnostics(
+    client: TestClient, events_config, catalog, mcp_result
+):
+    with _truncate_after_one_event(mcp_result):
+        response = _post_failing(
+            client,
+            events_config,
+            UnexpectedModelBehavior("provider failed"),
+            include=["events"],
+        )
+
+    assert response.status_code == 502
+    extensions = response.json()["extensions"]
+    assert [event["id"] for event in extensions["events"]] == ["evt-1"]
+    assert extensions["truncations"] == [
+        {"channel": "events", "truncated": True, "dropped_count": 2}
+    ]
+    assert "tool_executions" not in extensions
+
+
 # --- Streaming ------------------------------------------------------------
 
 
@@ -471,6 +525,35 @@ def test_stream_without_include_has_no_event_chunks(
 
     assert all("extensions" not in c for c in chunks)
     assert all(c["choices"] for c in chunks)
+
+
+def test_stream_emits_one_truncation_marker_after_last_retained_event(
+    client: TestClient, events_config, catalog, mcp_result, model
+):
+    with _truncate_after_one_event(mcp_result):
+        chunks, lines = _stream(client, events_config, include=["events"])
+
+    event_index = next(
+        index
+        for index, chunk in enumerate(chunks)
+        if chunk.get("extensions", {}).get("event")
+    )
+    marker_indexes = [
+        index
+        for index, chunk in enumerate(chunks)
+        if chunk.get("extensions", {}).get("truncation")
+    ]
+    assert len(marker_indexes) == 1
+    assert event_index < marker_indexes[0] < len(chunks) - 1
+    marker = chunks[marker_indexes[0]]
+    assert marker["choices"] == []
+    assert marker["extensions"]["truncation"] == {
+        "channel": "events",
+        "truncated": True,
+        "dropped_count": 2,
+    }
+    assert chunks[-1]["choices"][0]["finish_reason"] == "stop"
+    assert lines[-1] == "data: [DONE]"
 
 
 def test_stream_events_on_closed_config_are_omitted_and_reported_in_header(

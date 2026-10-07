@@ -17,7 +17,7 @@ from pydantic_ai.models.test import TestModel
 from pydantic_ai.toolsets.function import FunctionToolset
 
 from app.exceptions.provider_errors import ProviderError, ProviderTimeoutError
-from app.inference.agent_runner import StreamedEvent
+from app.inference.agent_runner import StreamedEvent, StreamedTruncation
 
 
 def _sdk_timeout() -> ModelAPIError:
@@ -164,15 +164,36 @@ class TestAgentRunnerRunStream:
             recorded.clear()
             return pending
 
+        drain_truncation = MagicMock(
+            return_value={
+                "channel": "events",
+                "truncated": True,
+                "dropped_count": 2,
+            }
+        )
+
         with patch("app.inference.agent_runner.Agent", return_value=agent):
-            stream = runner.run_stream("hello", drain_events=drain_events)
+            stream = runner.run_stream(
+                "hello",
+                drain_events=drain_events,
+                drain_event_truncation=drain_truncation,
+            )
             assert await anext(stream) == StreamedEvent({"id": "evt-1"})
+            assert await anext(stream) == StreamedTruncation(
+                {
+                    "channel": "events",
+                    "truncated": True,
+                    "dropped_count": 2,
+                }
+            )
             with pytest.raises(RuntimeError, match="later provider failure"):
                 await anext(stream)
+        drain_truncation.assert_called_once_with()
 
     @pytest.mark.asyncio
     async def test_run_stream_disconnect_does_not_retry_event_delivery(self, runner):
         drain_events = MagicMock(return_value=[])
+        drain_truncation = MagicMock(return_value=None)
 
         @asynccontextmanager
         async def cancelled_stream(*args, **kwargs):
@@ -189,12 +210,51 @@ class TestAgentRunnerRunStream:
             patch("app.inference.agent_runner.Agent", return_value=agent),
             pytest.raises(asyncio.CancelledError),
         ):
-            async for _ in runner.run_stream("hello", drain_events=drain_events):
+            async for _ in runner.run_stream(
+                "hello",
+                drain_events=drain_events,
+                drain_event_truncation=drain_truncation,
+            ):
                 pass
 
         # A cancelled transport is no longer writable. Delivery remains
         # best-effort rather than consuming records that no client can see.
         drain_events.assert_not_called()
+        drain_truncation.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_run_stream_emits_truncation_after_final_event(self, runner):
+        agent = _make_agent_mock(stream_chunks=["done"])
+        drain_events = MagicMock(side_effect=[[], [{"id": "evt-1"}]])
+        drain_truncation = MagicMock(
+            return_value={
+                "channel": "events",
+                "truncated": True,
+                "dropped_count": 3,
+            }
+        )
+
+        with patch("app.inference.agent_runner.Agent", return_value=agent):
+            items = [
+                item
+                async for item in runner.run_stream(
+                    "hello",
+                    drain_events=drain_events,
+                    drain_event_truncation=drain_truncation,
+                )
+            ]
+
+        assert items == [
+            "done",
+            StreamedEvent({"id": "evt-1"}),
+            StreamedTruncation(
+                {
+                    "channel": "events",
+                    "truncated": True,
+                    "dropped_count": 3,
+                }
+            ),
+        ]
 
     @pytest.mark.asyncio
     async def test_run_stream_completes_tool_loop_after_preamble(self):

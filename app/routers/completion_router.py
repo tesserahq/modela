@@ -6,13 +6,14 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Response
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
-from app.infra.logging_config import get_logger
+from tessera_sdk.server.dependencies.auth import get_current_user
+
 from app.auth.rbac import build_rbac_dependencies, infer_project
 from app.commands.completions.create_completion_command import CreateCompletionCommand
 from app.db import get_db
-from app.inference import StreamedEvent
+from app.inference import StreamedExtension
+from app.infra.logging_config import get_logger
 from app.schemas.completion import CompletionCreate, CompletionResponse
-from tessera_sdk.server.dependencies.auth import get_current_user
 
 # A streamed completion keeps using the session (model config, MCP tool
 # lookups, knowledge search) while the response is being sent, so the session
@@ -59,19 +60,19 @@ async def create_completion(
         async def _sse():
             first = True
             async for delta in delta_gen:
-                if isinstance(delta, StreamedEvent):
-                    # Domain events ride in empty-choice chunks so text-only
-                    # OpenAI-compatible clients skip them; `role` stays on the
-                    # first text chunk.
-                    event_chunk = {
+                if isinstance(delta, StreamedExtension):
+                    # Extensions ride in empty-choice chunks so text-only
+                    # OpenAI-compatible clients skip them; adding a future
+                    # channel does not require another transport branch.
+                    extension_chunk = {
                         "id": completion_id,
                         "object": "chat.completion.chunk",
                         "created": created_ts,
                         "model": config_slug,
                         "choices": [],
-                        "extensions": {"event": delta.payload},
+                        "extensions": {delta.field: delta.payload},
                     }
-                    yield f"data: {json.dumps(event_chunk)}\n\n"
+                    yield f"data: {json.dumps(extension_chunk)}\n\n"
                     continue
                 chunk = {
                     "id": completion_id,

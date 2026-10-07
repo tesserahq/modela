@@ -5551,7 +5551,7 @@ urllib3 = ">=1.26.0"
 type = "git"
 url = "https://github.com/tesserahq/tessera-sdk-py.git"
 reference = "main"
-resolved_reference = "638dfd25315ad2491994b7bab3d3fe7c2ef26604"
+resolved_reference = "d70145ca6f8ce81bc6f0d32b0ff6712b13cd0612"
 
 [[package]]
 name = "tiktoken"
