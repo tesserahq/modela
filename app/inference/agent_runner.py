@@ -2,9 +2,14 @@ from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass
 from typing import Any
 
+import httpx
 from opentelemetry import trace
 from pydantic_ai import Agent
-from pydantic_ai.exceptions import UnexpectedModelBehavior
+from pydantic_ai.exceptions import (
+    ModelAPIError,
+    ModelHTTPError,
+    UnexpectedModelBehavior,
+)
 from pydantic_ai.messages import (
     ModelMessage,
     ModelRequest,
@@ -24,6 +29,28 @@ from app.inference.model import ModelaModel
 from app.infra.telemetry import safe_instrument_span
 
 tracer = trace.get_tracer(__name__)
+
+_PROVIDER_TIMEOUT_STATUSES = frozenset({408, 504})
+
+
+def _classify_provider_error(error: ModelAPIError) -> ProviderError:
+    """Map a failed provider request to the provider error the API reports.
+
+    pydantic-ai wraps SDK failures in ModelAPIError; an SDK timeout (e.g.
+    openai.APITimeoutError) is chained from the transport's
+    httpx.TimeoutException, so the cause chain identifies it without
+    importing each provider SDK.
+    """
+    if isinstance(error, ModelHTTPError):
+        if error.status_code in _PROVIDER_TIMEOUT_STATUSES:
+            return ProviderTimeoutError(str(error))
+        return ProviderError(str(error))
+    cause = error.__cause__
+    while cause is not None:
+        if isinstance(cause, (httpx.TimeoutException, TimeoutError)):
+            return ProviderTimeoutError(str(error))
+        cause = cause.__cause__
+    return ProviderError(str(error))
 
 
 @dataclass
@@ -88,8 +115,8 @@ class AgentRunner:
         ):
             try:
                 result = await agent.run(user_prompt, **run_kwargs)
-            except TimeoutError as e:
-                raise ProviderTimeoutError(str(e)) from e
+            except ModelAPIError as e:
+                raise _classify_provider_error(e) from e
             except UnexpectedModelBehavior as e:
                 if output_type is not None:
                     raise StructuredOutputValidationError(

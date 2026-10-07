@@ -9,14 +9,22 @@ import json
 from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx
+import openai
 import pytest
 from fastapi.testclient import TestClient
 from fastmcp.client.client import CallToolResult
-from pydantic_ai.exceptions import UnexpectedModelBehavior
+from pydantic_ai.exceptions import (
+    ModelAPIError,
+    ModelHTTPError,
+    UnexpectedModelBehavior,
+)
 from pydantic_ai.messages import ModelResponse, TextPart, ToolCallPart, ToolReturnPart
 from pydantic_ai.models.test import TestModel
 from sqlalchemy.orm import Session
 
+from app.exceptions.invalid_parameter_error import InvalidParameterError
+from app.exceptions.resource_not_found_error import ResourceNotFoundError
 from app.repositories.model_config_repository import ModelConfigRepository
 from app.schemas.mcp_tool import MCPCatalogTool
 from tests.app.services.mcp.event_fixtures import event_payload, events_meta
@@ -303,30 +311,86 @@ def test_expose_events_defaults_to_false(db: Session):
     assert config.expose_events is False
 
 
-@pytest.mark.parametrize(
-    ("error", "expected_status"),
-    [
-        (UnexpectedModelBehavior("provider failed"), 502),
-        (TimeoutError("provider timed out"), 504),
-        (RuntimeError("post-commit failure"), 500),
-    ],
-)
-def test_committed_events_survive_later_completion_failures(
+def _sdk_timeout() -> ModelAPIError:
+    """A provider timeout as pydantic-ai surfaces it from the OpenAI SDK."""
+    request = httpx.Request("POST", "https://api.openai.com/v1/chat/completions")
+    sdk_error = openai.APITimeoutError(request=request)
+    sdk_error.__cause__ = httpx.ReadTimeout("timed out", request=request)
+    error = ModelAPIError(model_name="gpt-4o", message="Request timed out.")
+    error.__cause__ = sdk_error
+    return error
+
+
+# Every classified failure keeps the status and body it has without the
+# `events` opt-in; opting in only adds the `extensions` member.
+CLASSIFIED_FAILURES = [
+    (UnexpectedModelBehavior("provider failed"), 502, "provider failed"),
+    (_sdk_timeout(), 504, "Request timed out."),
+    (
+        ModelHTTPError(503, "gpt-4o", "overloaded"),
+        502,
+        "status_code: 503, model_name: gpt-4o, body: overloaded",
+    ),
+    (InvalidParameterError("bad temperature"), 422, "bad temperature"),
+    (ResourceNotFoundError("knowledge base missing"), 404, "knowledge base missing"),
+]
+
+
+def _post_failing(client, config, error, **extra):
+    with patch(
+        "app.commands.completions.create_completion_command.build_model",
+        return_value=FailAfterCreateModel(error),
+    ):
+        return _post(client, config, **extra)
+
+
+@pytest.mark.parametrize("opted_in", [False, True], ids=["direct", "events"])
+@pytest.mark.parametrize(("error", "expected_status", "detail"), CLASSIFIED_FAILURES)
+def test_completion_failures_keep_status_and_body_with_events_opt_in(
     client: TestClient,
     events_config,
     catalog,
     mcp_result,
     error,
     expected_status,
+    detail,
+    opted_in,
 ):
-    with patch(
-        "app.commands.completions.create_completion_command.build_model",
-        return_value=FailAfterCreateModel(error),
-    ):
-        response = _post(client, events_config, include=["events"])
+    extra = {"include": ["events"]} if opted_in else {}
+    response = _post_failing(client, events_config, error, **extra)
 
+    body = response.json()
+    extensions = body.pop("extensions", None)
     assert response.status_code == expected_status
-    assert response.json()["extensions"]["events"][0]["id"] == "evt-1"
+    assert body == {"detail": detail}
+    if opted_in:
+        assert extensions["events"][0]["id"] == "evt-1"
+    else:
+        assert extensions is None
+
+
+def test_unexpected_failure_after_commit_is_logged_with_events(
+    client: TestClient, events_config, catalog, mcp_result
+):
+    # Patch the module logger directly: the app's logging config disables
+    # propagation once the app is built, so caplog would miss it.
+    with patch("app.exceptions.handlers.logger") as logger:
+        response = _post_failing(
+            client,
+            events_config,
+            RuntimeError("post-commit failure"),
+            include=["events"],
+        )
+
+    body = response.json()
+    assert response.status_code == 500
+    assert body["code"] == 500
+    assert "RuntimeError: post-commit failure" in body["message"]
+    assert body["extensions"]["events"][0]["id"] == "evt-1"
+    # A handled wrapper never reaches ServerErrorMiddleware, so the handler
+    # must log the original error itself for it to reach error reporting.
+    logger.error.assert_called_once()
+    assert isinstance(logger.error.call_args.kwargs["exc_info"], RuntimeError)
 
 
 def test_failure_response_without_event_opt_in_remains_unchanged(
