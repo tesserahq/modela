@@ -6,7 +6,11 @@ from collections.abc import Iterable
 from typing import Any
 
 from pydantic_core import to_json
-from tessera_sdk.mcp import MCPEvent
+from tessera_sdk.mcp import (
+    CompletionInclude,
+    MCPEvent,
+    TruncationMarker,
+)
 
 from app.infra.logging_config import get_logger
 
@@ -66,9 +70,28 @@ class CompletionEventCollector:
         self._drained = len(self._events)
         return pending
 
+    def truncation(self) -> dict[str, Any] | None:
+        """Return the channel marker, or None when nothing was suppressed.
+
+        ``dropped_count`` is final only once event production has ended, so
+        callers read it at terminal success or failure.
+        """
+        if self._suppressed == 0:
+            return None
+        return TruncationMarker(
+            channel=CompletionInclude.EVENTS,
+            dropped_count=self._suppressed,
+        ).model_dump(mode="json")
+
     @property
     def events(self) -> list[dict[str, Any]]:
         return list(self._events)
+
+    @property
+    def truncations(self) -> list[dict[str, Any]]:
+        """Return the channel marker collection used by non-streaming output."""
+        marker = self.truncation()
+        return [marker] if marker is not None else []
 
     @property
     def suppressed_count(self) -> int:

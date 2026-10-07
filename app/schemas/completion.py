@@ -81,8 +81,24 @@ class CompletionUsage(BaseModel):
 
 
 class CompletionExtensions(BaseModel):
+    # The event collector already validated these payloads, so they pass
+    # through as-is. The SDK's read-side view would re-validate them and
+    # silently drop invalid items without counting them as truncated.
+
     # Serialized Tessera `Event` objects, in the order their tools completed.
     events: list[dict[str, Any]] = Field(default_factory=list)
+    # Present only when the channel dropped events.
+    truncations: Optional[list[dict[str, Any]]] = None
+
+
+def build_event_extensions(
+    events: list[dict[str, Any]], truncations: list[dict[str, Any]]
+) -> dict[str, Any]:
+    """Build the `extensions` body shared by success and error responses."""
+    extensions: dict[str, Any] = {"events": events}
+    if truncations:
+        extensions["truncations"] = truncations
+    return extensions
 
 
 class CompletionResponse(BaseModel):

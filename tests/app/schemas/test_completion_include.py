@@ -2,7 +2,11 @@ import pytest
 from pydantic import ValidationError
 from tessera_sdk.mcp import CompletionInclude
 
-from app.schemas.completion import CompletionCreate
+from app.schemas.completion import (
+    CompletionCreate,
+    CompletionExtensions,
+    build_event_extensions,
+)
 
 MESSAGES = [{"role": "user", "content": "Hi"}]
 
@@ -74,3 +78,20 @@ def test_other_extra_body_content_is_still_ignored():
     payload = CompletionCreate(messages=MESSAGES, extra_body={"temperature": 0.2})
 
     assert payload.include is None
+
+
+def test_response_extensions_pass_payloads_through_unchanged():
+    # Payloads that the SDK read-side view would reject must not be dropped.
+    events = [{"id": "evt-1", "unexpected": {"nested": True}}, {"not": "an event"}]
+    truncations = [{"channel": "events", "truncated": True, "dropped_count": 2}]
+
+    extensions = CompletionExtensions(**build_event_extensions(events, truncations))
+
+    assert extensions.model_dump(exclude_unset=True) == {
+        "events": events,
+        "truncations": truncations,
+    }
+
+
+def test_event_extensions_omit_empty_truncations():
+    assert build_event_extensions([], []) == {"events": []}

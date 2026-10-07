@@ -19,7 +19,11 @@ from app.infra.logging_config import get_logger
 from app.repositories.mcp_tool_catalog_repository import MCPToolCatalogRepository
 from app.repositories.model_config_repository import ModelConfigRepository
 from app.repositories.system_prompt_repository import SystemPromptRepository
-from app.schemas.completion import CompletionCreate, CompletionResponse
+from app.schemas.completion import (
+    CompletionCreate,
+    CompletionResponse,
+    build_event_extensions,
+)
 from app.services.mcp.event_collector import CompletionEventCollector
 from app.services.mcp.mcp_toolset import MCPToolset
 from app.services.mcp.tool_executor import MCPToolExecutor
@@ -82,15 +86,15 @@ class CreateCompletionCommand:
         except Exception as error:
             if event_collector is None:
                 raise
-            raise CompletionRunError(error, events=event_collector.events) from error
+            raise CompletionRunError(
+                error,
+                events=event_collector.events,
+                truncations=event_collector.truncations,
+            ) from error
 
         # `extensions` is passed only when requested, so it stays unset (and is
         # omitted from the response) for callers that did not opt in.
-        extensions = (
-            {"extensions": {"events": event_collector.events}}
-            if event_collector is not None
-            else {}
-        )
+        extensions = self._response_extensions(event_collector)
         return CompletionResponse(
             **extensions,
             id=f"chatcmpl-{uuid.uuid4().hex}",
@@ -153,7 +157,20 @@ class CreateCompletionCommand:
             message_history=messages or None,
             toolsets=toolsets,
             drain_events=event_collector.drain if event_collector else None,
+            event_truncation=(event_collector.truncation if event_collector else None),
         )
+
+    @staticmethod
+    def _response_extensions(
+        event_collector: CompletionEventCollector | None,
+    ) -> dict:
+        if event_collector is None:
+            return {}
+        return {
+            "extensions": build_event_extensions(
+                event_collector.events, event_collector.truncations
+            )
+        }
 
     def _event_collector_for(self, payload, config) -> CompletionEventCollector | None:
         """Return a collector when the `events` channel is requested and exposed.

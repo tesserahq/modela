@@ -13,3 +13,14 @@ def test_completion_run_error_preserves_original_error_and_isolates_events():
     assert error.events == [
         {"id": "evt-1", "event_data": {"resource": {"id": "person-1"}}}
     ]
+
+
+def test_completion_run_error_isolates_truncation_markers():
+    source = [{"channel": "events", "truncated": True, "dropped_count": 2}]
+
+    error = CompletionRunError(ProviderError("failed"), events=[], truncations=source)
+    source[0]["dropped_count"] = 99
+
+    assert error.truncations == [
+        {"channel": "events", "truncated": True, "dropped_count": 2}
+    ]
