@@ -122,8 +122,8 @@ async def test_agent_run_emits_orchestration_span(monkeypatch):
     agent = MagicMock()
     result = MagicMock()
     result.output = "extracted"
-    result.usage.return_value.input_tokens = 3
-    result.usage.return_value.output_tokens = 2
+    result.usage.input_tokens = 3
+    result.usage.output_tokens = 2
     agent.run = AsyncMock(return_value=result)
 
     with patch("app.inference.agent_runner.Agent", return_value=agent):

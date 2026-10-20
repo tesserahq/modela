@@ -134,7 +134,7 @@ class ModelaModel(Model):
             ) as stream:
                 yield stream
             latency_ms = int((time.monotonic() - start) * 1000)
-            usage = stream.usage()
+            usage = stream.usage
             span.set_attribute("gen_ai.usage.input_tokens", usage.input_tokens or 0)
             span.set_attribute("gen_ai.usage.output_tokens", usage.output_tokens or 0)
             span.set_attribute("modela.provider.latency_ms", latency_ms)

@@ -77,7 +77,7 @@ def test_structured_output_returns_dict_in_content(
 
     mock_result = MagicMock()
     mock_result.output = SentimentOutput(sentiment="positive", confidence=0.91)
-    mock_result.usage.return_value = _make_usage()
+    mock_result.usage = _make_usage()
 
     with patch(
         "app.inference.agent_runner.Agent.run",
@@ -102,7 +102,7 @@ def test_plain_config_still_returns_string_content(
 ):
     mock_result = MagicMock()
     mock_result.output = "Hello from the model."
-    mock_result.usage.return_value = _make_usage()
+    mock_result.usage = _make_usage()
 
     with patch(
         "app.inference.agent_runner.Agent.run",
