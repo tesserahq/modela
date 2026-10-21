@@ -92,7 +92,7 @@ def _mock_agent_run():
         "document_number": "X1234567",
         "date_of_birth": "1990-01-15",
     }
-    mock_result.usage.return_value = mock_usage
+    mock_result.usage = mock_usage
     return mock_result
 
 

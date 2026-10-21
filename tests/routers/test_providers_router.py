@@ -1,5 +1,6 @@
 from unittest.mock import MagicMock, patch
 
+import genai_prices
 import pytest
 
 
@@ -68,15 +69,23 @@ def test_list_providers_includes_pricing_for_known_models(client):
 
 
 def test_list_providers_omits_pricing_for_unrecognized_models(client):
-    response = client.get("/providers")
+    real_calc_price = genai_prices.calc_price
+
+    def calc_price(usage, model_ref, *, provider_id):
+        if model_ref == "claude-opus-5":
+            raise LookupError(f"Unable to find model with {model_ref=!r}")
+        return real_calc_price(usage, model_ref, provider_id=provider_id)
+
+    with patch("app.services.pricing.genai_prices.calc_price", side_effect=calc_price):
+        response = client.get("/providers")
 
     assert response.status_code == 200
     providers = {item["id"]: item for item in response.json()}
 
     anthropic_models = {m["id"]: m for m in providers["anthropic"]["models"]}
-    unreleased_model = anthropic_models["claude-opus-5"]
-    assert unreleased_model["input_price_per_mtok"] is None
-    assert unreleased_model["output_price_per_mtok"] is None
+    unrecognized_model = anthropic_models["claude-opus-5"]
+    assert unrecognized_model["input_price_per_mtok"] is None
+    assert unrecognized_model["output_price_per_mtok"] is None
 
 
 def test_list_providers_groups_models_by_family(client):

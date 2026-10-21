@@ -378,7 +378,7 @@ def test_stream_false_returns_standard_response(client: TestClient, default_conf
     mock_usage.output_tokens = 10
     mock_result = MagicMock()
     mock_result.output = "Non-streaming response."
-    mock_result.usage.return_value = mock_usage
+    mock_result.usage = mock_usage
 
     from unittest.mock import AsyncMock
 
