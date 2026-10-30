@@ -24,14 +24,14 @@ worker = "run_worker:main"
 python = ">=3.14,<3.15"
 fastapi = "^v0.141.0"
 python-dotenv = "^1.2.4"
-sqlalchemy = "^2.0.39"
+sqlalchemy = "^2.1.6"
 asyncpg = "^0.32.0"
 gunicorn = "26.2.0"
-alembic = "^1.20.0"
+alembic = "^1.20.1"
 faker = "40.43.0"
 psycopg2-binary = "^2.9.13"
 black = "^26.10.1"
-ruff = "0.17.1"
+ruff = "0.17.3"
 python-jose = "^3.3.0"
 
 opentelemetry-instrumentation-fastapi = "^0.63b1"
@@ -59,11 +59,11 @@ tessera-sdk = { git = "https://github.com/tesserahq/tessera-sdk-py.git", branch 
 pytz = "^2026"
 postmarker = "^1.0"
 mako = "^1.4.3"
-faststream = {extras = ["nats"], version = "^0.7.7"}
+faststream = {extras = ["nats"], version = "^0.7.8"}
 
 pydantic = {extras = ["email"], version = "^2.14.1"}
 pydantic-ai = {extras = ["openai"], version = "^2.0.0"}
-pydantic-settings = "^2.16.0"
+pydantic-settings = "^2.16.1"
 
 fastmcp = "^3.3.1"
 fastmcp-slim = {extras = ["client"], version = "^3.4.7"}
@@ -79,7 +79,7 @@ version = "^0.54.0"
 [tool.poetry.group.dev.dependencies]
 pytest = "^9.0.0"
 httpx = "^0.28.0"  # Required by FastAPI TestClient
-pytest-asyncio = "^1.0.0"
+pytest-asyncio = "^1.4.1"
 
 [tool.pytest.ini_options]
 asyncio_mode = "strict"
