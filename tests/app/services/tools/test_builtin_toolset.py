@@ -19,8 +19,9 @@ def test_returns_toolset_with_builtin_id_when_search_enabled():
 
 
 def test_tool_closure_delegates_to_search_module():
-    db = MagicMock()
-    toolset = build_builtin_toolset(db, ["search_knowledge_base"])
+    sessions = MagicMock()
+    db = sessions.return_value.__enter__.return_value
+    toolset = build_builtin_toolset(sessions, ["search_knowledge_base"])
     tool_fn = toolset.tools["search_knowledge_base"].function
 
     with patch(
@@ -29,5 +30,7 @@ def test_tool_closure_delegates_to_search_module():
     ) as mock_search:
         result = tool_fn("what is X?")
 
+    # Each call opens its own short session.
+    sessions.assert_called_once_with()
     mock_search.assert_called_once_with(db, "what is X?")
     assert result == ["excerpt"]

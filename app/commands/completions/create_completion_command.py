@@ -1,24 +1,26 @@
 import time
 import uuid
+from functools import partial
 from uuid import UUID
 
 from fastapi import HTTPException
+from fastapi.concurrency import run_in_threadpool
 from pydantic_ai.messages import (
     ModelRequest,
     ModelResponse,
     TextPart,
     UserPromptPart,
 )
-from sqlalchemy.orm import Session
 
 from app.commands.completions.schema_to_model import schema_to_model
+from app.commands.load_model_config import load_model_config
+from app.db import SessionFactory
 from app.exceptions.completion_run_error import CompletionRunError
 from app.exceptions.resource_not_found_error import ResourceNotFoundError
 from app.inference import AgentRunner, build_model
 from app.infra.logging_config import get_logger
 from app.repositories.mcp_tool_catalog_repository import MCPToolCatalogRepository
 from app.repositories.model_config_repository import ModelConfigRepository
-from app.repositories.system_prompt_repository import SystemPromptRepository
 from app.schemas.completion import (
     CompletionCreate,
     CompletionResponse,
@@ -33,9 +35,16 @@ logger = get_logger()
 
 
 class CreateCompletionCommand:
-    def __init__(self, db: Session) -> None:
-        self.db = db
-        self.repo = ModelConfigRepository(db)
+    """Runs a chat completion without holding a database connection.
+
+    The config, system prompt and MCP servers load in short sessions in the
+    threadpool before the model runs; tool calls open their own (linden-api
+    SDD 0012). A streamed run therefore holds no connection while it streams.
+    """
+
+    def __init__(self, sessions: SessionFactory) -> None:
+        self._sessions = sessions
+        self._tool_catalog = MCPToolCatalogRepository(sessions)
         # Extension channels the caller requested but the resolved ModelConfig
         # does not expose; the router reports them in a response header.
         self.omitted_includes: list[str] = []
@@ -48,24 +57,18 @@ class CreateCompletionCommand:
         *,
         user_id: UUID,
     ) -> CompletionResponse:
-        config = self._resolve_config(payload.model)
+        config, config_system_prompt = await self._load_config(payload.model)
         event_collector = self._event_collector_for(payload, config)
 
         result_model: type | None = None
         if config.output_schema:
             result_model = schema_to_model(config.output_schema)
 
-        tools = await MCPToolCatalogRepository(self.db).get_tools_for_model_config(
+        tools = await self._tool_catalog.get_tools_for_model_config(
             config.id, user_id=user_id
         )
 
         model = build_model(config, project_id, request_id, user_id=user_id)
-
-        config_system_prompt = None
-        if config.system_prompt_id is not None:
-            config_system_prompt = SystemPromptRepository(
-                self.db
-            ).get_current_content_by_id(config.system_prompt_id)
 
         caller_system_prompts, messages, user_prompt = _split_messages(payload.messages)
         system_prompt_content = _merge_system_prompts(
@@ -123,7 +126,7 @@ class CreateCompletionCommand:
         *,
         user_id: UUID,
     ):
-        config = self._resolve_config(payload.model)
+        config, config_system_prompt = await self._load_config(payload.model)
 
         if config.output_schema:
             raise HTTPException(
@@ -132,17 +135,11 @@ class CreateCompletionCommand:
             )
         event_collector = self._event_collector_for(payload, config)
 
-        tools = await MCPToolCatalogRepository(self.db).get_tools_for_model_config(
+        tools = await self._tool_catalog.get_tools_for_model_config(
             config.id, user_id=user_id
         )
 
         model = build_model(config, project_id, request_id, user_id=user_id)
-
-        config_system_prompt = None
-        if config.system_prompt_id is not None:
-            config_system_prompt = SystemPromptRepository(
-                self.db
-            ).get_current_content_by_id(config.system_prompt_id)
 
         caller_system_prompts, messages, user_prompt = _split_messages(payload.messages)
         system_prompt_content = _merge_system_prompts(
@@ -199,7 +196,7 @@ class CreateCompletionCommand:
         rely on."""
         toolsets = []
         if mcp_tools:
-            executor = MCPToolExecutor(self.db)
+            executor = MCPToolExecutor(self._sessions)
             toolsets.append(
                 MCPToolset(
                     mcp_tools,
@@ -208,14 +205,22 @@ class CreateCompletionCommand:
                     event_collector=event_collector,
                 )
             )
-        builtin_toolset = build_builtin_toolset(self.db, config.enabled_tools)
+        builtin_toolset = build_builtin_toolset(self._sessions, config.enabled_tools)
         if builtin_toolset is not None:
             toolsets.append(builtin_toolset)
         return toolsets or None
 
-    def _resolve_config(self, model_slug):
+    async def _load_config(self, model_slug):
+        return await run_in_threadpool(
+            load_model_config,
+            self._sessions,
+            partial(self._resolve_config, model_slug=model_slug),
+        )
+
+    @staticmethod
+    def _resolve_config(repo: ModelConfigRepository, model_slug):
         if model_slug:
-            config = self.repo.get_by_slug(model_slug)
+            config = repo.get_by_slug(model_slug)
             if config is None:
                 raise ResourceNotFoundError(f"ModelConfig '{model_slug}' not found")
             if config.config_type != "chat":
@@ -225,7 +230,7 @@ class CreateCompletionCommand:
                     f"(config_type='{config.config_type}')",
                 )
             return config
-        config = self.repo.get_default_for_type("chat")
+        config = repo.get_default_for_type("chat")
         if config is None:
             raise ResourceNotFoundError("No default chat ModelConfig is configured")
         return config

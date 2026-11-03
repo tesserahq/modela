@@ -1,15 +1,16 @@
 """Builds a pydantic-ai FunctionToolset from a ModelConfig's `enabled_tools`
 list, wrapping the built-in tool implementations (registry.py) as plain
-functions closed over the request's DB session."""
+functions that each open a short session. pydantic-ai runs sync tool functions
+in a thread, so the search stays off the event loop."""
 
 from pydantic_ai.toolsets.function import FunctionToolset
-from sqlalchemy.orm import Session
 
+from app.db import SessionFactory
 from app.services.knowledge.search import search_knowledge_base_chunks
 
 
 def build_builtin_toolset(
-    db: Session, enabled_tools: list[str] | None
+    sessions: SessionFactory, enabled_tools: list[str] | None
 ) -> FunctionToolset | None:
     """Returns None if `enabled_tools` is empty/None or names nothing this
     implementation recognizes yet (the registry and this builder are two
@@ -27,7 +28,8 @@ def build_builtin_toolset(
             most relevant excerpts for the given query. Use this to ground
             answers about product concepts, features, or documentation
             instead of guessing."""
-            return search_knowledge_base_chunks(db, query)
+            with sessions() as db:
+                return search_knowledge_base_chunks(db, query)
 
         tools.append(search_knowledge_base)
 

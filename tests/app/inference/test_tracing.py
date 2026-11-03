@@ -161,13 +161,15 @@ async def test_scan_command_emits_safe_scan_span(monkeypatch):
     config.system_prompt_id = None
 
     command = scan_module.CreateScanCommand(MagicMock())
-    command.repo = MagicMock()
-    command.repo.get_default_for_type.return_value = config
     agent_result = MagicMock(output={"private_field": "secret"})
     agent_result.input_tokens = 3
     agent_result.output_tokens = 2
 
     with (
+        patch(
+            "app.commands.scan.create_scan_command.load_model_config",
+            return_value=(config, None),
+        ),
         patch("app.commands.scan.create_scan_command.validate_file_url"),
         patch("app.commands.scan.create_scan_command.schema_to_model"),
         patch("app.commands.scan.create_scan_command.build_model"),

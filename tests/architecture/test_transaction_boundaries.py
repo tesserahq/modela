@@ -2,13 +2,11 @@
 tessera_sdk.testing.transaction_guards (see docs/managed-transactions.md in
 tessera-sdk-py).
 
-Every transaction rule is fully enforced, so any violation fails. The only
-exceptions are the reasoned early commits in ``early_commit_allowlist``.
-
+Every rule is fully enforced, so any violation fails, including
 ``async_database_access`` (synchronous database access inside ``async def``,
-linden-api SDD 0012) starts from the violations listed in
-``transaction_baseline.json``; each fix removes its entry. Regenerate it with
-``UPDATE_TRANSACTION_BASELINE=1 pytest tests/architecture``.
+linden-api SDD 0012). The only exceptions are the reasoned early commits in
+``early_commit_allowlist``. Async routes that await LLM or MCP calls take
+``ShortSessions`` and do their database work in the threadpool.
 """
 
 from pathlib import Path

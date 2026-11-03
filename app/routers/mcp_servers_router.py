@@ -3,7 +3,8 @@
 from typing import Optional, cast
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.concurrency import run_in_threadpool
 from fastapi_pagination import Page, Params
 from fastapi_pagination.ext.sqlalchemy import paginate
 from sqlalchemy.orm import Session
@@ -15,7 +16,7 @@ from app.commands.mcp_servers import (
     RefreshMcpServerToolsCommand,
     UpdateMcpServerCommand,
 )
-from app.db import DbSession
+from app.db import DbSession, SessionFactory, ShortSessions
 from app.models.mcp_server import MCPServer
 from app.routers.utils.dependencies import get_mcp_server_by_id
 from app.schemas.mcp_server import (
@@ -110,16 +111,14 @@ def update_mcp_server(
     response_model=MCPToolsListResponse,
 )
 async def list_mcp_server_tools(
-    db: DbSession,
-    mcp_server: MCPServer = Depends(get_mcp_server_by_id),
+    id: UUID,
+    sessions: ShortSessions,
     _authorized: bool = Depends(rbac["read"]),
     _current_user=Depends(get_current_user),
 ) -> MCPToolsListResponse:
     """List the tool catalog for this MCP server (cached, unless expired)."""
-    credential_svc = CredentialApplier(db)
-    headers = credential_svc.apply_for_user(
-        cast(Optional[UUID], mcp_server.credential_id),
-        user_id=getattr(_current_user, "id", None),
+    mcp_server, headers = await run_in_threadpool(
+        _load_server_connection, sessions, id, getattr(_current_user, "id", None)
     )
     catalog = ToolCatalog.new()
     tools = await catalog.get_tools(mcp_server, headers)
@@ -134,17 +133,34 @@ async def list_mcp_server_tools(
     response_model=MCPToolsRefreshResponse,
 )
 async def refresh_mcp_server_tools(
-    db: DbSession,
-    mcp_server: MCPServer = Depends(get_mcp_server_by_id),
+    id: UUID,
+    sessions: ShortSessions,
     _authorized: bool = Depends(rbac["update"]),
     _current_user=Depends(get_current_user),
 ) -> MCPToolsRefreshResponse:
     """Force-refresh the tool catalog for this MCP server."""
-    command = RefreshMcpServerToolsCommand(db)
-    return await command.execute(
-        mcp_server,
-        user_id=getattr(_current_user, "id", None),
+    mcp_server, headers = await run_in_threadpool(
+        _load_server_connection, sessions, id, getattr(_current_user, "id", None)
     )
+    return await RefreshMcpServerToolsCommand().execute(mcp_server, headers)
+
+
+def _load_server_connection(
+    sessions: SessionFactory, id: UUID, user_id: Optional[UUID]
+) -> tuple[MCPServer, dict[str, str]]:
+    """Look up the server and its auth headers in a short session, so the
+    MCP call that follows holds no DB connection. The server comes back
+    detached with its columns loaded."""
+    with sessions() as db:
+        mcp_server = MCPServerRepository(db).get_mcp_server(id)
+        if mcp_server is None:
+            raise HTTPException(status_code=404, detail="MCP server not found")
+        headers = CredentialApplier(db).apply_for_user(
+            cast(Optional[UUID], mcp_server.credential_id),
+            user_id=user_id,
+        )
+        db.expunge(mcp_server)
+    return mcp_server, headers
 
 
 @router.delete("/{id}", status_code=204)

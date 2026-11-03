@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from fastapi.concurrency import run_in_threadpool
 from tessera_sdk.infra.cache import Cache
 
 from app.services.mcp.client_factory import client_context
@@ -79,7 +80,8 @@ class ToolCatalog:
         ttl = mcp_server.tool_cache_ttl_seconds
 
         if not force_refresh:
-            raw = self._cache.read(key)
+            # The cache client is sync Redis: keep it off the event loop.
+            raw = await run_in_threadpool(self._cache.read, key)
             if raw is not None and isinstance(raw, list):
                 return [MCPCatalogTool.model_validate(t) for t in raw]
 
@@ -101,5 +103,5 @@ class ToolCatalog:
 
         catalog_tools = [_tool_to_catalog_tool(t, server_id, prefix) for t in tools]
         payload = [t.model_dump(mode="json") for t in catalog_tools]
-        self._cache.write(key, payload, ttl=ttl)
+        await run_in_threadpool(self._cache.write, key, payload, ttl=ttl)
         return catalog_tools
