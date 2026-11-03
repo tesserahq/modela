@@ -1,10 +1,9 @@
 import uuid
 from fastapi import APIRouter, Depends
-from sqlalchemy.orm import Session
 
 from app.auth.rbac import build_rbac_dependencies, infer_project
 from app.commands.scan.create_scan_command import CreateScanCommand
-from app.db import DbSession
+from app.db import ShortSessions
 from app.schemas.scan import ScanFileRequest, ScanResponse
 from tessera_sdk.server.dependencies.auth import get_current_user
 
@@ -20,12 +19,12 @@ _rbac = build_rbac_dependencies(resource=RBAC_RESOURCE, project_resolver=infer_p
 )
 async def scan_file(
     payload: ScanFileRequest,
-    db: DbSession,
+    sessions: ShortSessions,
     project_id: str = Depends(infer_project),
     current_user=Depends(get_current_user),
 ):
     request_id = str(uuid.uuid4())
-    return await CreateScanCommand(db).execute_file(
+    return await CreateScanCommand(sessions).execute_file(
         file_url=payload.file_url,
         mime_type=payload.mime_type,
         model_slug=payload.model,

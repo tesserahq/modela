@@ -8,9 +8,10 @@ from dataclasses import dataclass, field
 from typing import Any, Optional
 from uuid import UUID
 
-from sqlalchemy.orm import Session
+from fastapi.concurrency import run_in_threadpool
 from tessera_sdk.mcp import MCPEvent, MCPMetadataError, parse_mcp_metadata
 
+from app.db import SessionFactory
 from app.infra.logging_config import get_logger
 from app.services.mcp.client_factory import client_context
 from app.services.credential_applier import CredentialApplier
@@ -54,11 +55,13 @@ class MCPToolExecutor:
     Executes call_tool(original_name, args) against an MCP server.
 
     Enforces timeout, resolves auth via CredentialRepository, and maps errors
-    to structured responses for the LLM.
+    to structured responses for the LLM. The server and its auth resolve in a
+    short session in the threadpool; the call itself holds no database
+    connection (linden-api SDD 0012).
     """
 
-    def __init__(self, db: Session) -> None:
-        self._db = db
+    def __init__(self, sessions: SessionFactory) -> None:
+        self._sessions = sessions
 
     async def execute(
         self,
@@ -105,25 +108,20 @@ class MCPToolExecutor:
             The LLM-facing value (or error dict on failure) and, when
             requested, validated domain events from a successful result.
         """
-        mcp_svc = MCPServerRepository(self._db)
-        cred_svc = CredentialApplier(self._db)
-
-        server = mcp_svc.get_mcp_server_by_server_id(server_id)
-        if server is None:
+        connection = await run_in_threadpool(
+            self._resolve_connection, server_id, user_id
+        )
+        if connection is None:
             return MCPToolCallResult(
                 {
                     "error": "Tool execution failed",
                     "reason": f"Server {server_id!r} not found",
                 }
             )
-
-        headers = cred_svc.apply_for_user(
-            server.credential_id,
-            user_id=user_id,
-        )
+        url, headers = connection
 
         try:
-            async with client_context(server.url, headers) as client:
+            async with client_context(url, headers) as client:
                 result = await asyncio.wait_for(
                     client.call_tool(
                         original_name, arguments=args or {}, raise_on_error=False
@@ -164,6 +162,20 @@ class MCPToolExecutor:
             else ()
         )
         return MCPToolCallResult(_to_llm_output(result.data), events)
+
+    def _resolve_connection(
+        self, server_id: str, user_id: Optional[UUID]
+    ) -> tuple[str, dict[str, str]] | None:
+        """The server's URL and auth headers, or None if it does not exist."""
+        with self._sessions() as db:
+            server = MCPServerRepository(db).get_mcp_server_by_server_id(server_id)
+            if server is None:
+                return None
+            headers = CredentialApplier(db).apply_for_user(
+                server.credential_id,
+                user_id=user_id,
+            )
+            return server.url, headers
 
 
 def _parse_events(

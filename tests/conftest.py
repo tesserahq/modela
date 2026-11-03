@@ -1,4 +1,5 @@
 import os
+from contextlib import contextmanager
 from app.config import get_settings
 import pytest
 import logging
@@ -7,9 +8,10 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 from fastapi import Request
 from fastapi.security import HTTPAuthorizationCredentials
-from app.db import get_db
+from app.db import get_db, get_session_scope
 from tessera_sdk.testing import execution_boundary as sdk_execution_boundary
 from tessera_sdk.testing import managed_db_override
+from tessera_sdk.infra.transactions import bind_session
 from unittest.mock import patch
 from starlette.middleware.base import BaseHTTPMiddleware
 from alembic import command
@@ -160,6 +162,33 @@ def execution_boundary(db):
 
 
 @pytest.fixture(scope="function")
+def short_sessions(db):
+    """Session factory for code that opens its own short sessions
+    (app.db.ShortSessions). Like production, each scope is a separate session
+    that commits and closes, so ORM objects it returns are detached; it runs
+    on the test connection, so it sees fixture data and the test rolls it
+    back. Fixture data staged in ``db`` is committed first."""
+    connection = db.connection()
+    factory = sessionmaker(bind=connection, join_transaction_mode="create_savepoint")
+
+    @contextmanager
+    def scope():
+        db.commit()
+        session = factory()
+        try:
+            with bind_session(session):
+                yield session
+            session.commit()
+        except Exception:
+            session.rollback()
+            raise
+        finally:
+            session.close()
+
+    return scope
+
+
+@pytest.fixture(scope="function")
 def faker():
     """Create a Faker instance for generating test data."""
     return Faker()
@@ -175,7 +204,7 @@ def create_client_fixture(user_fixture_name):
     """Helper function to create client fixtures with different users."""
 
     @pytest.fixture(scope="function")
-    def client_fixture(db, request):
+    def client_fixture(db, short_sessions, request):
         """Create a FastAPI test client with overridden database dependency and auth."""
 
         # Get the user from the specified fixture
@@ -196,6 +225,7 @@ def create_client_fixture(user_fixture_name):
         # Same contract as app.db.get_db, bound to the test session (which the
         # db fixture closes).
         app.dependency_overrides[get_db] = managed_db_override(db)
+        app.dependency_overrides[get_session_scope] = lambda: short_sessions
         app.dependency_overrides[get_current_user] = override_get_current_user
 
         # Create test client with auth headers

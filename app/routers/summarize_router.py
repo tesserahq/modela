@@ -1,10 +1,9 @@
 import uuid
 from fastapi import APIRouter, Depends
-from sqlalchemy.orm import Session
 
 from app.auth.rbac import build_rbac_dependencies, infer_project
 from app.commands.summarize.create_summarize_command import CreateSummarizeCommand
-from app.db import DbSession
+from app.db import ShortSessions
 from app.schemas.summarize import (
     SummarizeFileRequest,
     SummarizeResponse,
@@ -24,12 +23,12 @@ _rbac = build_rbac_dependencies(resource=RBAC_RESOURCE, project_resolver=infer_p
 )
 async def summarize_text(
     payload: SummarizeTextRequest,
-    db: DbSession,
+    sessions: ShortSessions,
     project_id: str = Depends(infer_project),
     current_user=Depends(get_current_user),
 ):
     request_id = str(uuid.uuid4())
-    return await CreateSummarizeCommand(db).execute_text(
+    return await CreateSummarizeCommand(sessions).execute_text(
         content=payload.content,
         model_slug=payload.model,
         project_id=project_id,
@@ -45,12 +44,12 @@ async def summarize_text(
 )
 async def summarize_file(
     payload: SummarizeFileRequest,
-    db: DbSession,
+    sessions: ShortSessions,
     project_id: str = Depends(infer_project),
     current_user=Depends(get_current_user),
 ):
     request_id = str(uuid.uuid4())
-    return await CreateSummarizeCommand(db).execute_file(
+    return await CreateSummarizeCommand(sessions).execute_file(
         file_url=payload.file_url,
         mime_type=payload.mime_type,
         model_slug=payload.model,

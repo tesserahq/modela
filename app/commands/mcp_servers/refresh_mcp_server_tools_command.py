@@ -2,37 +2,31 @@
 
 from __future__ import annotations
 
-from typing import Optional, cast
-from uuid import UUID
-
-from sqlalchemy.orm import Session
+from typing import cast
 
 from app.services.mcp.catalog import ToolCatalog
 from app.models.mcp_server import MCPServer
 from app.schemas.mcp_server import MCPToolsRefreshResponse
-from app.services.credential_applier import CredentialApplier
 
 
 class RefreshMcpServerToolsCommand:
     """
     Command to force-refresh tools from an MCP server.
-    Uses CredentialRepository for headers and ToolCatalog for fetching.
+    The caller resolves the server and its auth headers (in a short session);
+    this command only talks to the MCP server, holding no DB connection.
     """
-
-    def __init__(self, db: Session) -> None:
-        self.db = db
 
     async def execute(
         self,
         mcp_server: MCPServer,
-        user_id: Optional[UUID] = None,
+        headers: dict[str, str],
     ) -> MCPToolsRefreshResponse:
         """
         Force-refresh tools from the MCP server and return the response.
 
         Args:
-            mcp_server: The MCP server to refresh tools for.
-            user_id: Optional user ID for credential context.
+            mcp_server: The MCP server to refresh tools for (detached).
+            headers: Auth headers resolved for the calling user.
 
         Returns:
             MCPToolsRefreshResponse with server_id and tools_count.
@@ -40,11 +34,6 @@ class RefreshMcpServerToolsCommand:
         Raises:
             Exception: When tools cannot be fetched from the MCP server.
         """
-        credential_svc = CredentialApplier(self.db)
-        headers = credential_svc.apply_for_user(
-            cast(Optional[UUID], mcp_server.credential_id),
-            user_id=user_id,
-        )
         catalog = ToolCatalog.new()
         tools = await catalog.get_tools(mcp_server, headers, force_refresh=True)
         return MCPToolsRefreshResponse(

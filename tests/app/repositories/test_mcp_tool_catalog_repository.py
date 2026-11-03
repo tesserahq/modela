@@ -48,7 +48,7 @@ def _fake_tool(server_id: str) -> MCPCatalogTool:
 
 
 @pytest.mark.asyncio
-async def test_returns_tools_from_attached_servers(db: Session):
+async def test_returns_tools_from_attached_servers(db: Session, short_sessions):
     config = _make_config(db)
     server = _make_server(db)
     config.mcp_servers.append(server)
@@ -61,14 +61,16 @@ async def test_returns_tools_from_attached_servers(db: Session):
         new_callable=AsyncMock,
         return_value=[fake_tool],
     ):
-        tools = await MCPToolCatalogRepository(db).get_tools_for_model_config(config.id)
+        tools = await MCPToolCatalogRepository(
+            short_sessions
+        ).get_tools_for_model_config(config.id)
 
     assert len(tools) == 1
     assert tools[0].qualified_name == fake_tool.qualified_name
 
 
 @pytest.mark.asyncio
-async def test_excludes_tools_from_disabled_servers(db: Session):
+async def test_excludes_tools_from_disabled_servers(db: Session, short_sessions):
     config = _make_config(db)
     server = _make_server(db, enabled=False)
     config.mcp_servers.append(server)
@@ -79,14 +81,16 @@ async def test_excludes_tools_from_disabled_servers(db: Session):
         new_callable=AsyncMock,
         return_value=[_fake_tool(server.server_id)],
     ) as mock_get:
-        tools = await MCPToolCatalogRepository(db).get_tools_for_model_config(config.id)
+        tools = await MCPToolCatalogRepository(
+            short_sessions
+        ).get_tools_for_model_config(config.id)
 
     assert tools == []
     mock_get.assert_not_called()
 
 
 @pytest.mark.asyncio
-async def test_excludes_tools_from_soft_deleted_servers(db: Session):
+async def test_excludes_tools_from_soft_deleted_servers(db: Session, short_sessions):
     config = _make_config(db)
     server = _make_server(db)
     config.mcp_servers.append(server)
@@ -99,14 +103,16 @@ async def test_excludes_tools_from_soft_deleted_servers(db: Session):
         new_callable=AsyncMock,
         return_value=[_fake_tool(server.server_id)],
     ) as mock_get:
-        tools = await MCPToolCatalogRepository(db).get_tools_for_model_config(config.id)
+        tools = await MCPToolCatalogRepository(
+            short_sessions
+        ).get_tools_for_model_config(config.id)
 
     assert tools == []
     mock_get.assert_not_called()
 
 
 @pytest.mark.asyncio
-async def test_skips_failing_server_and_returns_remaining(db: Session):
+async def test_skips_failing_server_and_returns_remaining(db: Session, short_sessions):
     config = _make_config(db)
     server_a = _make_server(db, server_id=f"srv-a-{uuid4().hex[:6]}")
     server_b = _make_server(db, server_id=f"srv-b-{uuid4().hex[:6]}")
@@ -125,28 +131,34 @@ async def test_skips_failing_server_and_returns_remaining(db: Session):
         new_callable=AsyncMock,
         side_effect=_get_tools_side_effect,
     ):
-        tools = await MCPToolCatalogRepository(db).get_tools_for_model_config(config.id)
+        tools = await MCPToolCatalogRepository(
+            short_sessions
+        ).get_tools_for_model_config(config.id)
 
     assert len(tools) == 1
     assert tools[0].server_id == server_b.server_id
 
 
 @pytest.mark.asyncio
-async def test_no_attached_servers_returns_empty(db: Session):
+async def test_no_attached_servers_returns_empty(db: Session, short_sessions):
     config = _make_config(db)
 
     with patch(
         "app.services.mcp.catalog.ToolCatalog.get_tools",
         new_callable=AsyncMock,
     ) as mock_get:
-        tools = await MCPToolCatalogRepository(db).get_tools_for_model_config(config.id)
+        tools = await MCPToolCatalogRepository(
+            short_sessions
+        ).get_tools_for_model_config(config.id)
 
     assert tools == []
     mock_get.assert_not_called()
 
 
 @pytest.mark.asyncio
-async def test_only_returns_tools_from_attached_not_all_servers(db: Session):
+async def test_only_returns_tools_from_attached_not_all_servers(
+    db: Session, short_sessions
+):
     config = _make_config(db)
     attached = _make_server(db, server_id=f"attached-{uuid4().hex[:6]}")
     _make_server(db, server_id=f"unattached-{uuid4().hex[:6]}")
@@ -160,7 +172,9 @@ async def test_only_returns_tools_from_attached_not_all_servers(db: Session):
         new_callable=AsyncMock,
         return_value=[fake_tool],
     ):
-        tools = await MCPToolCatalogRepository(db).get_tools_for_model_config(config.id)
+        tools = await MCPToolCatalogRepository(
+            short_sessions
+        ).get_tools_for_model_config(config.id)
 
     assert len(tools) == 1
     assert tools[0].server_id == attached.server_id

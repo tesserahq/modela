@@ -32,15 +32,15 @@ def _fake_mcp_tool():
     )
 
 
-def test_no_mcp_tools_and_no_enabled_tools_returns_none(db):
+def test_no_mcp_tools_and_no_enabled_tools_returns_none(db, short_sessions):
     config = _make_config(db)
-    command = CreateCompletionCommand(db)
+    command = CreateCompletionCommand(short_sessions)
     assert command._build_toolsets(config, [], user_id=None) is None
 
 
-def test_enabled_tools_only_builds_single_builtin_toolset(db):
+def test_enabled_tools_only_builds_single_builtin_toolset(db, short_sessions):
     config = _make_config(db, enabled_tools=["search_knowledge_base"])
-    command = CreateCompletionCommand(db)
+    command = CreateCompletionCommand(short_sessions)
 
     toolsets = command._build_toolsets(config, [], user_id=None)
 
@@ -49,9 +49,9 @@ def test_enabled_tools_only_builds_single_builtin_toolset(db):
     assert toolsets[0].id == "builtin"
 
 
-def test_mcp_tools_and_enabled_tools_combine_into_two_toolsets(db):
+def test_mcp_tools_and_enabled_tools_combine_into_two_toolsets(db, short_sessions):
     config = _make_config(db, enabled_tools=["search_knowledge_base"])
-    command = CreateCompletionCommand(db)
+    command = CreateCompletionCommand(short_sessions)
 
     toolsets = command._build_toolsets(config, [_fake_mcp_tool()], user_id=None)
 
@@ -60,9 +60,9 @@ def test_mcp_tools_and_enabled_tools_combine_into_two_toolsets(db):
     assert {t.id for t in toolsets} == {"mcp", "builtin"}
 
 
-def test_mcp_tools_only_matches_pre_existing_behavior(db):
+def test_mcp_tools_only_matches_pre_existing_behavior(db, short_sessions):
     config = _make_config(db)
-    command = CreateCompletionCommand(db)
+    command = CreateCompletionCommand(short_sessions)
 
     toolsets = command._build_toolsets(config, [_fake_mcp_tool()], user_id=None)
 

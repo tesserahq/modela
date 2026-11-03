@@ -9,6 +9,11 @@ end the transaction. The mechanics come from tessera_sdk
 Modela's settings and re-exports them under the names the app imports.
 """
 
+from collections.abc import Callable
+from contextlib import AbstractContextManager
+from typing import Annotated
+
+from fastapi import Depends
 from app.config import get_settings
 from tessera_sdk.infra import current_session, on_commit, savepoint
 from tessera_sdk.infra.database import DatabaseManager
@@ -21,11 +26,14 @@ from sqlalchemy.orm import with_loader_criteria
 __all__ = [
     "Base",
     "DbSession",
+    "SessionFactory",
+    "ShortSessions",
     "SessionLocal",
     "current_session",
     "db_manager",
     "engine",
     "get_db",
+    "get_session_scope",
     "on_commit",
     "savepoint",
     "session_scope",
@@ -73,3 +81,19 @@ SessionLocal = db_manager.SessionLocal
 # `with session_scope() as db:`.
 get_db, DbSession = create_db_dependency(db_manager)
 session_scope = db_manager.session_scope
+
+SessionFactory = Callable[[], AbstractContextManager[Session]]
+
+
+def get_session_scope() -> SessionFactory:
+    """Hand a route the session factory instead of a request session.
+
+    Async routes that await slow I/O (LLM calls, MCP servers) must not hold a
+    pooled connection while they wait (linden-api SDD 0012). They declare
+    ``sessions: ShortSessions`` and open short sessions in the threadpool
+    around that I/O. Tests override this dependency.
+    """
+    return session_scope
+
+
+ShortSessions = Annotated[SessionFactory, Depends(get_session_scope)]

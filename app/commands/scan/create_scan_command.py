@@ -1,17 +1,19 @@
 import logging
+from functools import partial
 from uuid import UUID
 
+from fastapi.concurrency import run_in_threadpool
 from opentelemetry import trace
 from pydantic_ai.messages import DocumentUrl, ImageUrl
-from sqlalchemy.orm import Session
 
 from app.commands.completions.schema_to_model import schema_to_model
+from app.commands.load_model_config import load_model_config
+from app.db import SessionFactory
 from app.exceptions.invalid_parameter_error import InvalidParameterError
 from app.exceptions.resource_not_found_error import ResourceNotFoundError
 from app.infra.telemetry import safe_instrument_span
 from app.inference import AgentRunner, build_model
 from app.repositories.model_config_repository import ModelConfigRepository
-from app.repositories.system_prompt_repository import SystemPromptRepository
 from app.schemas.scan import ScanResponse
 from app.utils.url_validation import validate_file_url
 
@@ -34,9 +36,8 @@ _DEFAULT_SYSTEM_PROMPT = (
 
 
 class CreateScanCommand:
-    def __init__(self, db: Session) -> None:
-        self.db = db
-        self.repo = ModelConfigRepository(db)
+    def __init__(self, sessions: SessionFactory) -> None:
+        self._sessions = sessions
 
     async def execute_file(
         self,
@@ -53,7 +54,11 @@ class CreateScanCommand:
             "scan.file",
             attributes={"scan.mime_type": mime_type},
         ) as span:
-            config = self._resolve_config(model_slug)
+            config, resolved_system_prompt = await run_in_threadpool(
+                load_model_config,
+                self._sessions,
+                partial(self._resolve_config, model_slug=model_slug),
+            )
             span.set_attribute("modela.model_config.slug", config.slug)
             span.set_attribute("gen_ai.provider.name", config.provider)
             span.set_attribute("gen_ai.request.model", config.model)
@@ -69,13 +74,7 @@ class CreateScanCommand:
             output_type = schema_to_model(config.output_schema)
             model = build_model(config, project_id, request_id, user_id=user_id)
 
-            system_prompt_content = _DEFAULT_SYSTEM_PROMPT
-            if config.system_prompt_id is not None:
-                resolved = SystemPromptRepository(self.db).get_current_content_by_id(
-                    config.system_prompt_id
-                )
-                if resolved is not None:
-                    system_prompt_content = resolved
+            system_prompt_content = resolved_system_prompt or _DEFAULT_SYSTEM_PROMPT
 
             user_prompt = [
                 "Please extract the requested information from the following document.",
@@ -104,13 +103,14 @@ class CreateScanCommand:
                 request_id=request_id,
             )
 
-    def _resolve_config(self, model_slug: str | None):
+    @staticmethod
+    def _resolve_config(repo: ModelConfigRepository, model_slug: str | None):
         if model_slug:
-            config = self.repo.get_by_slug(model_slug)
+            config = repo.get_by_slug(model_slug)
             if config is None:
                 raise ResourceNotFoundError(f"ModelConfig '{model_slug}' not found")
             return config
-        config = self.repo.get_default_for_type("scan")
+        config = repo.get_default_for_type("scan")
         if config is None:
             raise ResourceNotFoundError("No default 'scan' ModelConfig is configured")
         return config

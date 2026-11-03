@@ -1,27 +1,17 @@
 import json
 import time
 import uuid
-from typing import Annotated
 
 from fastapi import APIRouter, Depends, Response
 from fastapi.responses import StreamingResponse
-from sqlalchemy.orm import Session
 from tessera_sdk.server.dependencies.auth import get_current_user
 
 from app.auth.rbac import build_rbac_dependencies, infer_project
 from app.commands.completions.create_completion_command import CreateCompletionCommand
-from app.db import get_db
+from app.db import ShortSessions
 from app.inference import StreamedExtension
 from app.infra.logging_config import get_logger
 from app.schemas.completion import CompletionCreate, CompletionResponse
-
-# A streamed completion keeps using the session (model config, MCP tool
-# lookups, knowledge search) while the response is being sent, so the session
-# must outlive the route function: FastAPI's default "request" scope ends it
-# after the response. The commit then follows the 2xx, which is inherent to
-# streaming (the status is sent before the body). Every other route uses
-# DbSession, which commits before the response.
-StreamingDbSession = Annotated[Session, Depends(get_db)]
 
 router = APIRouter(tags=["completions"])
 RBAC_RESOURCE = "completion"
@@ -40,7 +30,9 @@ logger = get_logger()
 async def create_completion(
     payload: CompletionCreate,
     response: Response,
-    db: StreamingDbSession,
+    # No request session: the command loads what it needs in short sessions
+    # and holds no connection while the model runs or streams (SDD 0012).
+    sessions: ShortSessions,
     project_id: str = Depends(infer_project),
     current_user=Depends(get_current_user),
 ):
@@ -50,7 +42,7 @@ async def create_completion(
         logger.info(
             f"Streaming completion for user {current_user.id} and project {project_id}"
         )
-        command = CreateCompletionCommand(db)
+        command = CreateCompletionCommand(sessions)
         config_slug, delta_gen = await command.stream_execute(
             payload, project_id, request_id, user_id=current_user.id
         )
@@ -115,7 +107,7 @@ async def create_completion(
     logger.info(
         f"Creating completion for user {current_user.id} and project {project_id}"
     )
-    command = CreateCompletionCommand(db)
+    command = CreateCompletionCommand(sessions)
     result = await command.execute(
         payload, project_id, request_id, user_id=current_user.id
     )
