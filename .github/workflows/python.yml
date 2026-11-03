@@ -62,7 +62,7 @@ jobs:
         run: |
           POETRY_VERSION=$(sed -n 's/.*POETRY_VERSION=\([0-9.]*\).*/\1/p' Dockerfile)
           test -n "$POETRY_VERSION"
-          pipx install "poetry==$POETRY_VERSION" && poetry install
+          pipx install --python "$(command -v python)" "poetry==$POETRY_VERSION" && poetry install
       - name: Verify production dependency set imports cleanly
         # Match the Dockerfile's Python image, Poetry version, and production
         # dependency set so release-only import failures surface in CI.
