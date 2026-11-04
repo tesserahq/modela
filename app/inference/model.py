@@ -1,12 +1,14 @@
+import asyncio
 import time
 from contextlib import asynccontextmanager
 from typing import AsyncIterator, Optional
 from uuid import UUID
 
 from opentelemetry import trace
-from pydantic_ai.models import Model, ModelRequestParameters, StreamedResponse
 from pydantic_ai.messages import ModelMessage, ModelResponse
+from pydantic_ai.models import Model, ModelRequestParameters, StreamedResponse
 from pydantic_ai.settings import ModelSettings
+
 from app.inference.adapters.parameter_validation import (
     clamp_model_config_parameter,
     resolve_provider_settings,
@@ -54,6 +56,23 @@ class ModelaModel(Model):
             "modela.request.streamed": streamed,
         }
 
+    async def _enqueue_usage(
+        self, *, input_tokens: int, output_tokens: int, latency_ms: int
+    ) -> None:
+        usage_kwargs = {
+            "request_id": self._request_id,
+            "project_id": self._project_id,
+            "model_config_slug": self._model_config.slug,
+            "provider": self._model_config.provider,
+            "model": self._model_config.model,
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
+            "finish_reason": None,
+            "latency_ms": latency_ms,
+            "created_by_id": str(self._user_id) if self._user_id else None,
+        }
+        await asyncio.to_thread(log_completion_usage.delay, **usage_kwargs)
+
     @property
     def model_name(self) -> str:
         return self._inner.model_name
@@ -95,17 +114,10 @@ class ModelaModel(Model):
             )
             span.set_attribute("modela.provider.latency_ms", latency_ms)
 
-        log_completion_usage.delay(
-            request_id=self._request_id,
-            project_id=self._project_id,
-            model_config_slug=self._model_config.slug,
-            provider=self._model_config.provider,
-            model=self._model_config.model,
+        await self._enqueue_usage(
             input_tokens=response.usage.input_tokens or 0,
             output_tokens=response.usage.output_tokens or 0,
-            finish_reason=None,
             latency_ms=latency_ms,
-            created_by_id=str(self._user_id) if self._user_id else None,
         )
 
         return response
@@ -138,17 +150,10 @@ class ModelaModel(Model):
             span.set_attribute("gen_ai.usage.input_tokens", usage.input_tokens or 0)
             span.set_attribute("gen_ai.usage.output_tokens", usage.output_tokens or 0)
             span.set_attribute("modela.provider.latency_ms", latency_ms)
-        log_completion_usage.delay(
-            request_id=self._request_id,
-            project_id=self._project_id,
-            model_config_slug=self._model_config.slug,
-            provider=self._model_config.provider,
-            model=self._model_config.model,
+        await self._enqueue_usage(
             input_tokens=usage.input_tokens or 0,
             output_tokens=usage.output_tokens or 0,
-            finish_reason=None,
             latency_ms=latency_ms,
-            created_by_id=str(self._user_id) if self._user_id else None,
         )
 
 
