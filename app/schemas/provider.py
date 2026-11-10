@@ -1,7 +1,8 @@
 from datetime import datetime
 from decimal import Decimal
+from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 class LiveProviderModel(BaseModel):
@@ -48,3 +49,24 @@ class ProviderCatalogCheckResponse(BaseModel):
 
     task_id: str
     status: str = "queued"
+
+
+class ProviderCatalogChangeRead(BaseModel):
+    """One recorded change in a provider's model list, or one failed check."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    provider_id: str
+    kind: str
+    model_id: str | None
+    error_category: str | None
+    detected_at: datetime
+    reviewed_at: datetime | None
+    reviewed_by_id: UUID | None
+
+
+class ProviderCatalogChangeReview(BaseModel):
+    """Body for PATCH /providers/catalog-changes/{entry_id}."""
+
+    reviewed: bool
