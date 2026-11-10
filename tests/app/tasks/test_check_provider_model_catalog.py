@@ -1,9 +1,18 @@
 from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from app.inference.adapters.base import BaseProviderAdapter
 from app.schemas.provider import LiveProviderModel, ProviderModelSchema
 from app.tasks.check_provider_model_catalog import check_provider_model_catalog_task
+
+
+@pytest.fixture(autouse=True)
+def _task_sessions_use_test_db(short_sessions):
+    """The task opens its own sessions; route them to the test database."""
+    with patch("app.tasks.check_provider_model_catalog.session_scope", short_sessions):
+        yield
 
 
 class _FakeAdapter(BaseProviderAdapter):
