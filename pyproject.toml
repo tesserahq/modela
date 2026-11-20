@@ -58,7 +58,7 @@ fastapi-pagination = "^0.16.3"
 # tessera-sdk = { path = "../tessera-sdk-py/", develop = true }
 tessera-sdk = { git = "https://github.com/tesserahq/tessera-sdk-py.git", branch = "main" }
 pytz = "^2026"
-postmarker = "^1.0"
+postmarker = "^3.0"
 mako = "^1.4.3"
 faststream = {extras = ["nats"], version = "^0.7.8"}
 
