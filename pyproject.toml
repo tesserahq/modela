@@ -28,10 +28,10 @@ sqlalchemy = "^2.1.9"
 asyncpg = "^0.32.0"
 gunicorn = "26.2.0"
 alembic = "^1.20.1"
-faker = "40.54.0"
+faker = "40.63.0"
 psycopg2-binary = "^2.9.13"
 black = "^26.10.1"
-ruff = "0.17.5"
+ruff = "0.17.6"
 python-jose = "^3.3.0"
 
 opentelemetry-instrumentation-fastapi = "^0.63b1"
@@ -42,7 +42,7 @@ opentelemetry-instrumentation-httpx = "^0.63b1"
 prometheus-fastapi-instrumentator = "^8.1.0"
 opentelemetry-instrumentation-celery = "0.63b1"
 opentelemetry-exporter-otlp-proto-grpc = "^1.42.1"
-grpcio = "^1.82.0"
+grpcio = "^1.85.3"
 opentelemetry-sdk = "^1.42.1"
 prometheus-client = ">=0.23.1"
 
@@ -60,9 +60,9 @@ tessera-sdk = { git = "https://github.com/tesserahq/tessera-sdk-py.git", branch 
 pytz = "^2026"
 postmarker = "^1.0"
 mako = "^1.4.3"
-faststream = {extras = ["nats"], version = "^0.7.8"}
+faststream = {extras = ["nats"], version = "^0.7.9"}
 
-pydantic = {extras = ["email"], version = "^2.14.2"}
+pydantic = {extras = ["email"], version = "^2.14.4"}
 pydantic-ai = {extras = ["openai"], version = "^2.0.0"}
 pydantic-settings = "^2.16.3"
 
@@ -70,7 +70,7 @@ fastmcp = "^3.3.1"
 fastmcp-slim = {extras = ["client"], version = "^3.4.7"}
 
 pgvector = "^0.5.0"
-pyyaml = "^6.0.2"
+pyyaml = "^6.0.4"
 
 
 [tool.poetry.dependencies.uvicorn]
